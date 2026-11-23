@@ -1,0 +1,10 @@
+{
+  "port": 4870,
+  "checkMark": "☑",
+  "ai": {
+    "provider": "gemini",
+    "model": "",
+    "apiKey": ""
+  },
+  "publicDataApiKey": ""
+}
