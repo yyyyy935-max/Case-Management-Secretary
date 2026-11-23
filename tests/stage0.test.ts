@@ -39,3 +39,14 @@ test('상태 화면 API는 API 키 값을 내보내지 않는다', async () => {
     server.close();
   }
 });
+
+test('시작.bat은 Windows 줄바꿈(CRLF)이고 UTF-8이 아닌 한글 Windows 기본 인코딩이다', async () => {
+  const { readFileSync } = await import('node:fs');
+  const bytes = readFileSync(new URL('../시작.bat', import.meta.url));
+  const text = bytes.toString('latin1');
+  assert.equal(text.split('\n').length, text.split('\r\n').length, 'LF만 있는 줄이 있음');
+  const utf8 = new TextDecoder('utf-8', { fatal: true });
+  assert.throws(() => utf8.decode(bytes), '한글이 UTF-8로 저장되어 있음');
+  const cp949 = new TextDecoder('euc-kr').decode(bytes);
+  assert.match(cp949, /Node\.js가 설치되어 있지 않습니다/);
+});
