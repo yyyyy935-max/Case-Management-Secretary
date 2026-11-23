@@ -39,6 +39,15 @@ export interface FormCell {
   nestedTableIndexes: number[];
 }
 
+/**
+ * 표 종류. form만 칸을 하나씩 분류하고, 나머지는 표 전체를 고정 문구로 본다.
+ * - title: "서식 6 | 서비스 의뢰서" 같은 제목 막대나 제목 상자
+ * - instructions: "항목 | 작성방법" 같은 작성 방법 설명 표
+ * - example: ○○○ 같은 가짜 값이 채워진 작성 예시 표
+ * - reference: "참고 2 …" 아래의 참고 자료 표
+ */
+export type TableKind = 'form' | 'title' | 'instructions' | 'example' | 'reference';
+
 export interface FormTable {
   /** 문서 안의 표 순서 (0부터, 셀 안 표 포함) */
   index: number;
@@ -50,6 +59,7 @@ export interface FormTable {
   precedingTexts: string[];
   rows: number;
   cols: number;
+  kind: TableKind;
   /** 병합으로 가려진 칸은 빼고, 병합된 칸의 왼쪽 위 칸만 담는다 */
   cells: FormCell[];
 }

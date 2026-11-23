@@ -36,6 +36,12 @@
     .item .txt { margin-top: 3px; }
     .item .why { margin-top: 3px; color: var(--muted); font-size: 12px; }
     .item .warn { color: var(--danger); font-size: 12px; margin-top: 3px; }
+    .btn { font-size: 14px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+    .btn:disabled { background: #fff; color: var(--muted); border-color: var(--line-strong); cursor: default; }
+    .item select { font-size: 12px; margin-left: auto; }
+    .review { background: #fff1f0; color: var(--danger); border-color: #f5b5ae; }
+    .changed { background: #e8f0ff; color: var(--accent); border-color: #a9c1f5; }
+    .ftable td.warn-cell::after { content: '?'; position: absolute; top: 1px; right: 3px; font-size: 10px; font-weight: 700; color: var(--danger); }
     .badge { display: inline-block; border-radius: 4px; padding: 1px 6px; font-size: 12px; font-weight: 700; border: 1px solid transparent; }
     .legend { display: flex; flex-wrap: wrap; gap: 6px; }
     /* 역할별 색 */
@@ -64,6 +70,8 @@
       <div class="toolbar">
         <label>양식 <select id="group"></select></label>
         <span id="summary" class="note"></span>
+        <span id="tplStatus" class="note"></span>
+        <button id="save" class="btn" disabled>고친 역할 저장</button>
       </div>
       <div class="legend" id="legend"></div>
       <div class="layout" style="margin-top:12px">
@@ -79,7 +87,7 @@
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    let data = null, byId = new Map(), filter = null, selected = null;
+    let data = null, byId = new Map(), filter = null, selected = null, overrides = {}, dirty = false, fileName = '';
 
     $('file').addEventListener('change', async (e) => {
       const f = e.target.files[0];
@@ -92,6 +100,9 @@
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || '분석하지 못했습니다.');
         data = json;
+        fileName = f.name;
+        overrides = { ...(data.template?.overrides || {}) };
+        dirty = false;
         byId = new Map([...data.classification.cells, ...data.classification.body].map((c) => [c.id, c]));
         const d = data.document;
         $('status').textContent = `"${f.name}" — ${d.format.toUpperCase()}, 표 ${d.tables.length}개, 칸 ${data.classification.cells.length}개`;
@@ -99,6 +110,7 @@
         $('group').innerHTML = groups.map((g) => `<option>${esc(g)}</option>`).join('');
         $('legend').innerHTML = Object.entries(data.roleNames).map(([k, v]) => `<span class="badge b-${k}">${esc(v)}</span>`).join('');
         filter = null; selected = null;
+        updateTplStatus();
         render();
         $('result').hidden = false;
       } catch (err) {
@@ -137,20 +149,28 @@
       const counts = {};
       for (const it of items) counts[it.cls.role] = (counts[it.cls.role] || 0) + 1;
       $('summary').textContent = `칸 ${items.length}개`;
+      const reviewCount = items.filter((it) => it.cls.warning).length;
       $('chips').innerHTML = `<button class="chip" data-role="" aria-pressed="${!filter}">전체 ${items.length}</button>` +
+        (reviewCount ? `<button class="chip" data-role="__review" aria-pressed="${filter === '__review'}">확인 필요 ${reviewCount}</button>` : '') +
         Object.entries(data.roleNames).filter(([k]) => counts[k]).map(([k, v]) => `<button class="chip" data-role="${k}" aria-pressed="${filter === k}">${esc(v)} ${counts[k]}</button>`).join('');
-      const shown = items.filter((it) => !filter || it.cls.role === filter);
+      const match = (cls) => !filter || (filter === '__review' ? !!cls.warning : cls.role === filter);
+      const shown = items.filter((it) => match(it.cls));
       $('list').innerHTML = shown.map(({ cell, cls }) => {
         const labels = [cls.rowLabel, cls.colLabel].filter(Boolean).join(' / ');
         return `<div class="item" data-id="${cell.id}">
-          <div class="top"><span class="badge b-${cls.role}">${esc(data.roleNames[cls.role])}</span><span class="id">${cell.id}</span>${labels ? `<span>${esc(labels)}</span>` : ''}</div>
+          <div class="top"><span class="badge b-${cls.role}">${esc(data.roleNames[cls.role])}</span>${cls.warning ? '<span class="badge review">확인 필요</span>' : ''}${cls.source === 'template' ? '<span class="badge changed">담당자가 정함</span>' : ''}<span class="id">${cell.id}</span>${labels ? `<span>${esc(labels)}</span>` : ''}
+            <select data-id="${cell.id}" aria-label="역할 바꾸기">${Object.entries(data.roleNames).map(([k, v]) => `<option value="${k}"${k === cls.role ? ' selected' : ''}>${esc(v)}${k === cls.ruleRole ? ' (규칙)' : ''}</option>`).join('')}</select></div>
           ${cell.text.trim() ? `<div class="txt">${esc(cell.text.trim().replace(/\s+/g, ' ').slice(0, 80))}</div>` : ''}
           <div class="why">${esc(cls.reason)}</div>
           ${cls.warning ? `<div class="warn">⚠ ${esc(cls.warning)}</div>` : ''}
         </div>`;
       }).join('') || '<div class="item">해당하는 칸이 없습니다.</div>';
 
-      document.querySelectorAll('#preview td[data-id]').forEach((td) => td.classList.toggle('dim', !!filter && byId.get(td.dataset.id).role !== filter));
+      document.querySelectorAll('#preview td[data-id]').forEach((td) => {
+        const c = byId.get(td.dataset.id);
+        td.classList.toggle('dim', !match(c));
+        td.classList.toggle('warn-cell', !!c.warning);
+      });
       if (selected) select(selected, false);
     }
 
@@ -184,9 +204,43 @@
       if (scroll) { cell?.scrollIntoView({ block: 'center', behavior: 'smooth' }); item?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     }
 
+    $('list').addEventListener('change', (e) => {
+      const sel = e.target.closest('select[data-id]');
+      if (!sel) return;
+      const c = byId.get(sel.dataset.id);
+      const role = sel.value;
+      if (role === c.ruleRole) delete overrides[c.id]; else overrides[c.id] = role;
+      c.role = role;
+      c.source = overrides[c.id] ? 'template' : 'rule';
+      c.reason = overrides[c.id] ? `담당자가 정함 (규칙 분류: ${data.roleNames[c.ruleRole]})` : c.reason.replace(/^담당자가 정함.*$/, '규칙 분류로 되돌림');
+      if (overrides[c.id]) c.warning = undefined;
+      dirty = true;
+      updateTplStatus();
+      const keep = sel.dataset.id;
+      render();
+      select(keep, false);
+    });
+    $('save').addEventListener('click', async () => {
+      $('save').disabled = true;
+      try {
+        const res = await fetch(`/api/forms/templates/${data.fingerprint}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fileName, format: data.document.format, overrides }) });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || '저장하지 못했습니다.');
+        data.template = json;
+        dirty = false;
+        updateTplStatus('저장했습니다. 같은 양식을 다시 올리면 고친 역할이 그대로 쓰입니다.');
+      } catch (err) {
+        updateTplStatus(err.message);
+      }
+    });
+    function updateTplStatus(msg) {
+      const n = Object.keys(overrides).length;
+      $('save').disabled = !dirty;
+      $('tplStatus').textContent = msg || (dirty ? `고친 칸 ${n}개 (아직 저장 안 함)` : data.template ? `저장된 양식 템플릿 사용 중 (담당자가 정한 칸 ${n}개)` : '');
+    }
     $('chips').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (!b) return; filter = b.dataset.role || null; render(); });
     $('list').addEventListener('click', (e) => { const it = e.target.closest('.item[data-id]'); if (it) select(it.dataset.id); });
-    $('preview').addEventListener('click', (e) => { const el = e.target.closest('[data-id]'); if (el) { e.stopPropagation(); if (filter && byId.get(el.dataset.id).role !== filter) { filter = null; render(); } select(el.dataset.id); } });
+    $('preview').addEventListener('click', (e) => { const el = e.target.closest('[data-id]'); if (el) { e.stopPropagation(); if (filter) { filter = null; render(); } select(el.dataset.id); } });
   </script>
 </body>
 </html>

@@ -5,6 +5,7 @@ import type { AppConfig } from './config.ts';
 import { ROOT_DIR } from './config.ts';
 import { logError } from './logger.ts';
 import { formsRouter } from './forms-api.ts';
+import { TemplateStore } from '../forms/templates.ts';
 
 const TEST_DATA_DIR = resolve(ROOT_DIR, 'test-data');
 
@@ -13,11 +14,12 @@ function listFiles(dir: string): string[] {
   return readdirSync(dir).filter((f) => !f.startsWith('.'));
 }
 
-export function createApp(config: AppConfig, configFromFile: boolean) {
+export function createApp(config: AppConfig, configFromFile: boolean, opts: { dataDir?: string } = {}) {
+  const dataDir = opts.dataDir ?? resolve(ROOT_DIR, 'data');
   const app = express();
 
   app.use(express.static(resolve(ROOT_DIR, 'public')));
-  app.use('/api/forms', formsRouter());
+  app.use('/api/forms', formsRouter(new TemplateStore(resolve(dataDir, 'templates'))));
 
   app.get('/api/status', (_req, res) => {
     const forms = listFiles(resolve(TEST_DATA_DIR, 'forms'));

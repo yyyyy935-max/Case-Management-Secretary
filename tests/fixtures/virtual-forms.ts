@@ -23,13 +23,13 @@ const HEADER_XML = `<?xml version="1.0" encoding="UTF-8"?><hh:head ${HH}><hh:ref
 <hh:charPr id="2" height="1500" textColor="#000000"><hh:bold/><hh:underline type="NONE"/></hh:charPr>
 </hh:charProperties></hh:refList></hh:head>`;
 
-interface C { r: number; c: number; rs?: number; cs?: number; t?: string; fill?: 1 | 2 | 3; char?: 0 | 1; h?: number; nested?: string }
+export interface C { r: number; c: number; rs?: number; cs?: number; t?: string; fill?: 1 | 2 | 3; char?: 0 | 1; h?: number; nested?: string }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const para = (text: string, char = 0, inner = '') =>
+export const para = (text: string, char = 0, inner = '') =>
   `<hp:p paraPrIDRef="0"><hp:run charPrIDRef="${char}">${inner}${text ? `<hp:t>${esc(text)}</hp:t>` : ''}</hp:run></hp:p>`;
 
-function table(rows: number, cols: number, cells: C[]): string {
+export function table(rows: number, cols: number, cells: C[]): string {
   const byRow = new Map<number, C[]>();
   for (const c of cells) byRow.set(c.r, [...(byRow.get(c.r) ?? []), c]);
   let xml = `<hp:tbl rowCnt="${rows}" colCnt="${cols}">`;
@@ -44,6 +44,15 @@ function table(rows: number, cols: number, cells: C[]): string {
     xml += '</hp:tr>';
   }
   return xml + '</hp:tbl>';
+}
+
+/** 섹션 본문 XML로 최소 HWPX 파일을 만든다 */
+export async function hwpxFrom(sectionInner: string): Promise<Uint8Array> {
+  const zip = new JSZip();
+  zip.file('mimetype', 'application/hwp+zip');
+  zip.file('Contents/header.xml', HEADER_XML);
+  zip.file('Contents/section0.xml', `<?xml version="1.0" encoding="UTF-8"?><hs:sec ${HP}>${sectionInner}</hs:sec>`);
+  return zip.generateAsync({ type: 'uint8array' });
 }
 
 /** 칸 종류를 고루 담은 가상 상담 기록지 (HWPX) */
@@ -103,10 +112,20 @@ export async function virtualHwpPair(): Promise<{ hwpx: Uint8Array; hwp: Uint8Ar
 // ── DOCX (직접 작성) ────────────────────────────────────────
 
 const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
-const run = (t: string, rpr = '') => `<w:r>${rpr ? `<w:rPr>${rpr}</w:rPr>` : ''}<w:t xml:space="preserve">${esc(t)}</w:t></w:r>`;
-const wp = (t: string, rpr = '') => `<w:p>${t ? run(t, rpr) : ''}</w:p>`;
-function tc(content: string, o: { span?: number; vmerge?: 'restart' | 'continue'; shade?: string; w?: number } = {}) {
+export const run = (t: string, rpr = '') => `<w:r>${rpr ? `<w:rPr>${rpr}</w:rPr>` : ''}<w:t xml:space="preserve">${esc(t)}</w:t></w:r>`;
+export const wp = (t: string, rpr = '') => `<w:p>${t ? run(t, rpr) : ''}</w:p>`;
+export function tc(content: string, o: { span?: number; vmerge?: 'restart' | 'continue'; shade?: string; w?: number } = {}) {
   return `<w:tc><w:tcPr><w:tcW w:w="${o.w ?? 1800}" w:type="dxa"/>${o.span ? `<w:gridSpan w:val="${o.span}"/>` : ''}${o.vmerge === 'restart' ? '<w:vMerge w:val="restart"/>' : o.vmerge === 'continue' ? '<w:vMerge/>' : ''}${o.shade ? `<w:shd w:val="clear" w:color="auto" w:fill="${o.shade}"/>` : ''}</w:tcPr>${content || '<w:p/>'}</w:tc>`;
+}
+
+/** 본문 XML로 최소 DOCX 파일을 만든다 */
+export async function docxFrom(bodyInner: string): Promise<Uint8Array> {
+  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${W}><w:body>${bodyInner}<w:sectPr/></w:body></w:document>`;
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
+  zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+  zip.file('word/document.xml', doc);
+  return zip.generateAsync({ type: 'uint8array' });
 }
 
 /** 가상 사례회의 기록 (DOCX) */
