@@ -19,9 +19,16 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if exist node_modules goto run
-echo [사례비서] 처음 실행이라 필요한 파일을 내려받습니다. 몇 분 걸릴 수 있습니다.
-call npm install --omit=dev || goto installfail
+rem 필요한 파일 목록(package-lock.json)이 바뀌었으면 다시 내려받는다
+if not exist node_modules goto install
+if not exist node_modules\.sarye-lock goto install
+fc /b package-lock.json node_modules\.sarye-lock > nul || goto install
+goto run
+
+:install
+echo [사례비서] 필요한 파일을 내려받습니다. 처음에는 몇 분 걸릴 수 있습니다.
+call npm install --omit=dev --omit=optional || goto installfail
+copy /y package-lock.json node_modules\.sarye-lock > nul
 
 :run
 if not exist config.local.json copy config.example.json config.local.json > nul

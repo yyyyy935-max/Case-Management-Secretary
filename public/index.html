@@ -4,19 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>사례비서</title>
-  <style>
-    body { font-family: "Malgun Gothic", sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; color: #222; background: #fff; }
-    h1 { font-size: 24px; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }
-    th { background: #f3f3f3; width: 30%; }
-    .ok { color: #1a7f37; } .warn { color: #b35900; }
-  </style>
+  <link rel="stylesheet" href="common.css">
 </head>
 <body>
+  <nav class="nav"><a href="/" aria-current="page">사례비서</a><a href="/forms.html">양식 칸 지도</a></nav>
+  <main class="wrap">
   <h1>사례비서</h1>
-  <p>0단계: 실행 확인 화면입니다. 아래 표가 채워지면 정상적으로 실행된 것입니다.</p>
-  <table id="status"><tr><td>불러오는 중…</td></tr></table>
+  <p>실행 상태입니다. 아래 표가 채워지면 정상적으로 실행된 것입니다. 양식을 분석하려면 위의 <a href="/forms.html">양식 칸 지도</a>를 누르세요.</p>
+  <table id="status" class="status"><tr><td>불러오는 중…</td></tr></table>
   <script>
     fetch('/api/status').then(r => r.json()).then(s => {
       const rows = [
@@ -34,5 +29,6 @@
     });
     function escapeHtml(t) { return t.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   </script>
+  </main>
 </body>
 </html>

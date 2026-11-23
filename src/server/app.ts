@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { AppConfig } from './config.ts';
 import { ROOT_DIR } from './config.ts';
 import { logError } from './logger.ts';
+import { formsRouter } from './forms-api.ts';
 
 const TEST_DATA_DIR = resolve(ROOT_DIR, 'test-data');
 
@@ -16,14 +17,15 @@ export function createApp(config: AppConfig, configFromFile: boolean) {
   const app = express();
 
   app.use(express.static(resolve(ROOT_DIR, 'public')));
+  app.use('/api/forms', formsRouter());
 
   app.get('/api/status', (_req, res) => {
     const forms = listFiles(resolve(TEST_DATA_DIR, 'forms'));
     const cases = listFiles(resolve(TEST_DATA_DIR, 'cases'));
     res.json({
       app: '사례비서',
-      version: '0.0.1',
-      stage: 0,
+      version: '0.1.0',
+      stage: 1,
       configFile: configFromFile ? '있음' : '없음 (기본값 사용)',
       checkMark: config.checkMark,
       ai: { provider: config.ai.provider, apiKeySet: config.ai.apiKey.length > 0 },

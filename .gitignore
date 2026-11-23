@@ -10,6 +10,7 @@ data/*
 # 테스트 자료 - 표준 양식은 협회 저작물이므로 저장소에 올리지 않음
 test-data/forms/*
 !test-data/forms/.gitkeep
+test-data/reports/
 test-data/cases/*
 !test-data/cases/.gitkeep
 
