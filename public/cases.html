@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>사례 카드 - 사례비서</title>
+  <link rel="stylesheet" href="common.css">
+  <style>
+    .notice { padding: 10px 14px; border-radius: 8px; background: #fff4e5; border: 1px solid #f3c27a; color: #7a4a00; margin-bottom: 12px; font-size: 14px; }
+    .grid { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+    .caselist button.case { display: block; width: 100%; text-align: left; padding: 8px; margin: 4px 0; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font: inherit; font-size: 14px; }
+    .caselist button.case[aria-current=true] { border-color: var(--accent); background: #eef4ff; }
+    .caselist .meta { color: var(--muted); font-size: 12px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    input[type=text], input[type=date], select, textarea { font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 6px; box-sizing: border-box; }
+    textarea { width: 100%; min-height: 110px; }
+    .btn { font-size: 14px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+    .btn.sub { background: #fff; color: var(--accent); }
+    .btn.danger { background: #fff; color: var(--danger); border-color: var(--danger); }
+    .btn:disabled { opacity: .5; cursor: default; }
+    section.block { margin-top: 16px; }
+    section.block > h2 { font-size: 17px; margin: 0 0 8px; }
+    .sug { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+    .sug .target { font-weight: 700; font-size: 13px; color: var(--accent); }
+    .sug input[type=text] { width: 100%; margin: 6px 0; }
+    .ev { font-size: 13px; color: var(--muted); border-left: 3px solid var(--line-strong); padding-left: 8px; margin: 4px 0; }
+    .conflict { font-size: 13px; color: var(--danger); }
+    .badge { display: inline-block; border-radius: 4px; padding: 1px 6px; font-size: 12px; border: 1px solid var(--line-strong); background: #fff; color: var(--muted); }
+    .badge.ok { color: var(--ok); border-color: #9fd3a7; background: #e6f6ea; }
+    table.card { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; }
+    table.card th, table.card td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+    table.card th { width: 160px; background: var(--panel); font-weight: 600; }
+    .fact { margin: 2px 0; }
+    .src { color: var(--muted); font-size: 12px; }
+    .rec { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+    .rec pre { white-space: pre-wrap; font: inherit; font-size: 14px; margin: 6px 0; }
+    .empty { color: var(--muted); font-size: 14px; }
+    .msg { font-size: 14px; margin-left: 8px; }
+    .msg.err { color: var(--danger); }
+    details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+    .linkbtn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 12px; padding: 0 4px; }
+  </style>
+</head>
+<body>
+  <nav class="nav"><a href="/">사례비서</a><a href="/cases.html" aria-current="page">사례 카드</a><a href="/forms.html">양식 칸 지도</a></nav>
+  <main class="wrap wide">
+    <h1>사례 카드</h1>
+    <div class="notice"><b>가상 사례만 넣으세요.</b> 이름·연락처를 가리고 AI로 보내는 기능(5단계)을 만들기 전이라, 지금은 실제 사례를 넣으면 안 됩니다. 사례는 이 PC의 data/cases 폴더에만 저장됩니다.</div>
+    <div id="aiStatus" class="note"></div>
+    <div class="grid">
+      <aside class="panel caselist">
+        <div class="row"><input type="text" id="newTitle" placeholder="사례 이름(가명)" style="flex:1;min-width:0"><button class="btn" id="create">새 사례</button></div>
+        <div id="cases"></div>
+      </aside>
+      <div id="main"><p class="empty">왼쪽에서 사례를 고르거나 새로 만드세요.</p></div>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let schema = null, current = null;
+
+    async function api(path, opts = {}) {
+      const res = await fetch('/api/cases' + path, { ...opts, headers: { 'Content-Type': 'application/json' }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || '처리하지 못했습니다.');
+      return json;
+    }
+
+    async function init() {
+      schema = await api('/schema');
+      $('aiStatus').textContent = schema.aiReady ? 'AI(Gemini) 연결 준비됨: 기록을 저장하면 사실을 뽑을 수 있습니다.' : 'AI 키가 아직 없어 "사실 뽑기"는 쓸 수 없습니다. 기록 저장과 직접 입력은 됩니다. (config.local.json의 ai.apiKey)';
+      await loadList();
+    }
+
+    async function loadList() {
+      const list = await api('');
+      $('cases').innerHTML = list.length ? list.map((c) => `<button class="case" data-id="${c.id}" aria-current="${current?.id === c.id}">${esc(c.title)}<div class="meta">기록 ${c.records}건${c.pending ? ` · 확인 대기 ${c.pending}` : ''}</div></button>`).join('') : '<p class="empty">사례가 없습니다.</p>';
+    }
+
+    $('create').addEventListener('click', async () => {
+      const c = await api('', { method: 'POST', body: { title: $('newTitle').value } });
+      $('newTitle').value = '';
+      current = c;
+      await loadList();
+      render();
+    });
+    $('cases').addEventListener('click', async (e) => {
+      const b = e.target.closest('button.case');
+      if (!b) return;
+      current = await api('/' + b.dataset.id);
+      await loadList();
+      render();
+    });
+
+    const recDate = (id) => current.records.find((r) => r.id === id)?.date ?? '';
+    const srcOf = (f) => f.sourceRecordIds?.length ? f.sourceRecordIds.map(recDate).join(', ') + ' 기록' : '담당자 직접 입력';
+    function targetLabel(t) {
+      if (t.kind === 'general') return `일반사항 · ${schema.general[t.key].label}`;
+      if (t.kind === 'need') return `욕구 · ${schema.needs[t.area]}`;
+      if (t.kind === 'person') return `인물 · ${t.relation} · ${schema.personAttrs[t.attr]}`;
+      return '서비스';
+    }
+
+    function render() {
+      const c = current;
+      const today = new Date().toISOString().slice(0, 10);
+      const sugs = c.suggestions.map((s) => `
+        <div class="sug" data-sid="${s.id}">
+          <div class="target">${esc(targetLabel(s.target))} <span class="badge">${esc(schema.speakers[s.speaker])}</span> <span class="src">${esc(recDate(s.recordId))} 기록</span></div>
+          <input type="text" value="${esc(s.value)}" aria-label="후보 값">
+          <div class="ev">근거: "${esc(s.evidence)}"</div>
+          ${s.conflictWith ? `<div class="conflict">지금 카드 값: "${esc(s.conflictWith)}" — 승인하면 이 후보로 바뀝니다.</div>` : ''}
+          <div class="row"><button class="btn" data-act="approve">승인</button><button class="btn danger" data-act="reject">거절</button></div>
+        </div>`).join('');
+      const rejected = c.rejected.length ? `<details><summary>걸러진 후보 ${c.rejected.length}개 (근거가 기록에 없거나 의견 등)</summary><ul>${c.rejected.map((r) => `<li class="src">${esc(r.reason)} — ${esc(JSON.stringify(r.raw).slice(0, 140))}</li>`).join('')}</ul></details>` : '';
+      const general = Object.entries(schema.general).map(([k, d]) => {
+        const f = c.general[k];
+        return `<tr><th>${esc(d.label)}</th><td>${f ? `${esc(f.value)} <span class="badge ok">확인</span> <span class="src">${esc(srcOf(f))}</span>` : '<span class="empty">확인 필요</span>'} <button class="linkbtn" data-edit-general="${k}">${f ? '고치기' : '직접 넣기'}</button></td></tr>`;
+      }).join('');
+      const people = c.people.map((p) => `<tr><th>${esc(p.relation)}${p.isClient ? ' (대상자)' : ''}</th><td>${Object.entries(p.attrs).map(([a, f]) => `<div class="fact">${esc(schema.personAttrs[a])}: ${esc(f.value)} <span class="src">${esc(srcOf(f))}</span></div>`).join('') || '<span class="empty">아직 없음</span>'}</td></tr>`).join('');
+      const needs = Object.entries(schema.needs).map(([k, label]) => `<tr><th>${esc(label)}</th><td>${(c.needs[k] ?? []).map((f, i) => `<div class="fact">${esc(f.value)} <span class="src">${esc(srcOf(f))}</span><button class="linkbtn" data-del-need="${k}:${i}" title="지우기">지우기</button></div>`).join('') || '<span class="empty">확인 필요</span>'}</td></tr>`).join('');
+      const services = c.services.map((s) => `<div class="fact">${esc(s.text.value)} <span class="src">${esc(srcOf(s.text))}</span></div>`).join('') || '<span class="empty">아직 없음</span>';
+      const records = [...c.records].reverse().map((r) => `
+        <div class="rec"><div class="row"><b>${esc(r.date)}</b><span class="badge">${esc(r.type)}</span>${r.extractedAt ? '<span class="src">사실 뽑기 함</span>' : ''}<button class="btn sub" data-extract="${r.id}" ${schema.aiReady ? '' : 'disabled'}>사실 뽑기</button></div><pre>${esc(r.rawText)}</pre></div>`).join('') || '<p class="empty">기록이 없습니다.</p>';
+
+      $('main').innerHTML = `
+        <div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.title)}</h2><button class="btn danger" id="del">사례 지우기</button></div>
+        <section class="block panel">
+          <h2>새 기록 넣기</h2>
+          <div class="row"><input type="date" id="rDate" value="${today}"><select id="rType">${schema.recordTypes.map((t) => `<option>${t}</option>`).join('')}</select><input type="text" id="rAuthor" placeholder="작성자(선택)"></div>
+          <textarea id="rText" placeholder="상담·방문·전화 메모를 붙여 넣으세요. (가상 사례만)"></textarea>
+          <div class="row"><button class="btn" id="saveRec">저장</button><button class="btn sub" id="saveExtract" ${schema.aiReady ? '' : 'disabled'}>저장하고 사실 뽑기</button><span id="recMsg" class="msg"></span></div>
+        </section>
+        <section class="block">
+          <h2>확인할 후보 ${c.suggestions.length ? `(${c.suggestions.length})` : ''}</h2>
+          ${sugs || '<p class="empty">확인할 후보가 없습니다.</p>'}
+          ${rejected}
+        </section>
+        <section class="block"><h2>일반사항</h2><table class="card">${general}</table></section>
+        <section class="block"><h2>인물 (대상자·가족·관계인)</h2><table class="card">${people}</table></section>
+        <section class="block"><h2>욕구 영역별 사실</h2><p class="src">욕구 수준 점수와 우선순위는 담당자가 양식에 직접 정합니다.</p><table class="card">${needs}</table></section>
+        <section class="block"><h2>이용·연계 서비스</h2><div class="panel">${services}</div></section>
+        <section class="block"><h2>기록 (${c.records.length})</h2>${records}</section>`;
+    }
+
+    async function saveRecord(extract) {
+      const msg = $('recMsg');
+      msg.className = 'msg';
+      try {
+        const r = await api(`/${current.id}/records`, { method: 'POST', body: { date: $('rDate').value, type: $('rType').value, rawText: $('rText').value, author: $('rAuthor').value } });
+        current = r.case;
+        if (extract) await runExtract(r.record.id);
+        else { render(); }
+        await loadList();
+      } catch (err) {
+        msg.className = 'msg err';
+        msg.textContent = err.message;
+      }
+    }
+
+    async function runExtract(recordId) {
+      document.querySelectorAll('[data-extract], #saveExtract').forEach((b) => { b.disabled = true; });
+      try {
+        const r = await api(`/${current.id}/records/${recordId}/extract`, { method: 'POST' });
+        current = r.case;
+        render();
+        const m = $('recMsg');
+        m.className = 'msg';
+        m.textContent = `후보 ${r.accepted}개를 찾았습니다${r.rejected.length ? `, ${r.rejected.length}개는 근거가 맞지 않아 뺐습니다` : ''}.`;
+      } catch (err) {
+        render();
+        const m = $('recMsg');
+        m.className = 'msg err';
+        m.textContent = err.message;
+      }
+      await loadList();
+    }
+
+    $('main').addEventListener('click', async (e) => {
+      try {
+        if (e.target.id === 'saveRec') return saveRecord(false);
+        if (e.target.id === 'saveExtract') return saveRecord(true);
+        if (e.target.dataset.extract) return runExtract(e.target.dataset.extract);
+        if (e.target.id === 'del') {
+          if (!confirm(`"${current.title}" 사례를 지울까요? 기록과 카드가 모두 지워집니다.`)) return;
+          await api('/' + current.id, { method: 'DELETE' });
+          current = null;
+          $('main').innerHTML = '<p class="empty">사례를 지웠습니다.</p>';
+          return loadList();
+        }
+        const sug = e.target.closest('.sug');
+        if (sug && e.target.dataset.act) {
+          const body = { action: e.target.dataset.act, value: sug.querySelector('input').value };
+          current = await api(`/${current.id}/suggestions/${sug.dataset.sid}`, { method: 'POST', body });
+          render();
+          return loadList();
+        }
+        if (e.target.dataset.editGeneral) {
+          const k = e.target.dataset.editGeneral;
+          const d = schema.general[k];
+          const now = current.general[k]?.value ?? '';
+          const v = prompt(`${d.label}${d.options ? ` (${d.options.join(', ')})` : ''}\n비우면 지웁니다.`, now);
+          if (v === null) return;
+          current = await api(`/${current.id}/general/${k}`, { method: 'PUT', body: { value: v } });
+          return render();
+        }
+        if (e.target.dataset.delNeed) {
+          const [area, i] = e.target.dataset.delNeed.split(':');
+          current = await api(`/${current.id}/needs/${area}/${i}`, { method: 'DELETE' });
+          return render();
+        }
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

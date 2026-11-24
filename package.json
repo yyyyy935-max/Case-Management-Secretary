@@ -1,6 +1,6 @@
 {
   "name": "case-management-secretary",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "사례비서 - 사례관리 담당자용 로컬 업무 도우미",
   "type": "module",
@@ -11,7 +11,8 @@
     "start": "tsx src/server/index.ts",
     "test": "node --import tsx --test \"tests/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "analyze": "tsx scripts/analyze-form.ts"
+    "analyze": "tsx scripts/analyze-form.ts",
+    "eval:extract": "tsx scripts/eval-extraction.ts"
   },
   "dependencies": {
     "@rhwp/core": "0.9.1",

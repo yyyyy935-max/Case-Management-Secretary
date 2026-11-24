@@ -6,6 +6,9 @@ import { ROOT_DIR } from './config.ts';
 import { logError } from './logger.ts';
 import { formsRouter } from './forms-api.ts';
 import { TemplateStore } from '../forms/templates.ts';
+import { casesRouter } from './cases-api.ts';
+import { CaseStore } from '../cases/store.ts';
+import type { AiProvider } from '../ai/provider.ts';
 
 const TEST_DATA_DIR = resolve(ROOT_DIR, 'test-data');
 
@@ -14,20 +17,21 @@ function listFiles(dir: string): string[] {
   return readdirSync(dir).filter((f) => !f.startsWith('.'));
 }
 
-export function createApp(config: AppConfig, configFromFile: boolean, opts: { dataDir?: string } = {}) {
+export function createApp(config: AppConfig, configFromFile: boolean, opts: { dataDir?: string; ai?: AiProvider } = {}) {
   const dataDir = opts.dataDir ?? resolve(ROOT_DIR, 'data');
   const app = express();
 
   app.use(express.static(resolve(ROOT_DIR, 'public')));
   app.use('/api/forms', formsRouter(new TemplateStore(resolve(dataDir, 'templates')), config));
+  app.use('/api/cases', casesRouter(new CaseStore(resolve(dataDir, 'cases')), config, opts.ai));
 
   app.get('/api/status', (_req, res) => {
     const forms = listFiles(resolve(TEST_DATA_DIR, 'forms'));
     const cases = listFiles(resolve(TEST_DATA_DIR, 'cases'));
     res.json({
       app: '사례비서',
-      version: '0.2.0',
-      stage: 2,
+      version: '0.3.0',
+      stage: 3,
       configFile: configFromFile ? '있음' : '없음 (기본값 사용)',
       checkMark: config.checkMark,
       ai: { provider: config.ai.provider, apiKeySet: config.ai.apiKey.length > 0 },
