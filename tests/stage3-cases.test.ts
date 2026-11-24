@@ -167,3 +167,22 @@ test('저장: 사례는 data/cases 의 파일로 남고 다시 읽힌다, 잘못
   assert.throws(() => store.get('../../etc/passwd'));
   assert.throws(() => addRecord(c, { date: '11월 1일', type: '전화', rawText: 'x' }));
 });
+
+test('OpenRouter 연결: 키는 머리글로, 학습 거부 조건을 넣고, 실제 금액을 누적한다, 호출 제한이면 다시 시도', async () => {
+  const { OpenRouterProvider } = await import('../src/ai/openrouter.ts');
+  const calls: { url: string; init?: RequestInit }[] = [];
+  let n = 0;
+  const fakeFetch = (async (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
+    if (n++ === 0) return new Response('', { status: 429, headers: { 'retry-after': '0' } });
+    return new Response(JSON.stringify({ choices: [{ message: { content: '{"facts":[]}' } }], usage: { prompt_tokens: 100, completion_tokens: 20, cost: 0.0012 } }));
+  }) as unknown as typeof fetch;
+  const o = new OpenRouterProvider('OR-KEY', 'google/gemini-2.5-flash', fakeFetch);
+  assert.equal(await o.generate({ system: 's', prompt: 'p' }), '{"facts":[]}');
+  assert.equal(calls.length, 2, '429 다음에 다시 시도');
+  assert.equal((calls[1]!.init!.headers as Record<string, string>).authorization, 'Bearer OR-KEY');
+  const body = JSON.parse(String(calls[1]!.init!.body));
+  assert.equal(body.provider.data_collection, 'deny');
+  assert.equal(body.model, 'google/gemini-2.5-flash');
+  assert.deepEqual(o.usage, { calls: 1, inputTokens: 100, outputTokens: 20, costUsd: 0.0012 });
+});

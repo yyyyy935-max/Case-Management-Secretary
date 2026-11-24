@@ -111,8 +111,13 @@ export function verifyFacts(raw: unknown, record: CaseRecord, c: Case): VerifyRe
 
   for (const item of facts) {
     const f = (item ?? {}) as RawFact;
-    const category = String(f.category ?? '');
-    const key = String(f.key ?? '');
+    let category = String(f.category ?? '');
+    let key = String(f.key ?? '');
+    // AI가 분류 자리에 욕구 영역이나 일반사항 항목 이름을 넣은 경우 바로잡는다 (내용은 그대로, 형식만)
+    if (category in NEED_AREAS) { key = category; category = 'need'; }
+    else if (category in GENERAL_KEYS) { key = category; category = 'general'; }
+    // 인물의 "관계" 자체를 항목으로 낸 경우(예: "6살 아들")는 특이사항으로 받는다
+    if (category === 'person' && (key === 'relation' || key === 'info' || key === 'basic')) key = 'note';
     const value = typeof f.value === 'string' ? f.value.trim() : '';
     const evidence = typeof f.evidence === 'string' ? f.evidence.trim() : '';
     const speaker = String(f.speaker ?? '');
@@ -128,7 +133,10 @@ export function verifyFacts(raw: unknown, record: CaseRecord, c: Case): VerifyRe
 
     // 정해진 선택지 값(예: 1인가구)은 근거 문장의 말과 달라도 되므로 숫자·낱말 검사를 하지 않는다
     const optionDef = category === 'general' && key in GENERAL_KEYS ? (GENERAL_KEYS[key as GeneralKey] as { options?: readonly string[] }) : undefined;
-    if (!optionDef?.options) {
+    // 성별은 "여"와 "여성"처럼 말이 달라도 같은 뜻이면 통과 (근거에 남·여를 나타내는 말이 있어야 함)
+    const sexOk = category === 'person' && key === 'sex' && (/^여(성|자)?$/.test(value) ? /(^|[^가-힣])여([^가-힣]|성|자|$)|딸|어머니|할머니|누나|언니|아내|부인/.test(evidence) : /^남(성|자)?$/.test(value) ? /(^|[^가-힣])남([^가-힣]|성|자|$)|아들|아버지|할아버지|남편|형|오빠/.test(evidence) : false);
+    if (category === 'person' && key === 'sex' && !sexOk) { reject(item, '성별 값이 근거 문장과 맞지 않음'); continue; }
+    if (!optionDef?.options && !sexOk) {
       // 값의 숫자가 근거 문장에 있는가
       const evNums = evidenceNumbers(evidence);
       const missing = numbersIn(value).map((n) => n.replace(/,/g, '')).filter((n) => !evNums.has(n));

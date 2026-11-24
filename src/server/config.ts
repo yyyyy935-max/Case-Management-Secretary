@@ -6,7 +6,8 @@ export type CheckMark = '■' | '☑' | 'V';
 export interface AppConfig {
   port: number;
   checkMark: CheckMark;
-  ai: { provider: 'gemini'; model: string; apiKey: string };
+  /** provider: gemini(Google 직접) 또는 openrouter(여러 모델을 키 하나로). model: 모델 이름 */
+  ai: { provider: 'gemini' | 'openrouter'; model: string; apiKey: string };
   publicDataApiKey: string;
 }
 

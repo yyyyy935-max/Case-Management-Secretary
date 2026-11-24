@@ -23,7 +23,7 @@ export const EXTRACT_SYSTEM = `너는 사회복지 사례관리 담당자를 돕
 
 [반드시 지킬 것]
 1. 기록에 적힌 것만 뽑는다. 짐작, 추론, 일반 상식으로 덧붙이지 않는다. 기록에 없으면 내지 않는다.
-2. evidence에는 그 사실이 적힌 기록 원문의 구절을 글자 그대로 복사한다. 고치거나 요약하거나 맞춤법을 바로잡지 않는다.
+2. evidence에는 그 사실이 적힌 기록 원문의 문장 전체를 글자 그대로 복사한다. 고치거나 요약하거나 맞춤법을 바로잡지 않는다. value에 쓴 내용이 모두 evidence 안에 있어야 한다.
 3. value는 근거 구절의 내용을 바꾸지 않는 짧고 평이한 문장으로 쓴다. 숫자·날짜·금액은 원문 그대로 쓴다. 원문에 없는 숫자를 쓰지 않는다.
 4. 누가 말했거나 보았는지 speaker로 구분한다. 대상자의 바람·생각은 대상자의 말로 쓴다(예: 본인은 "줄이고 싶다"고 함).
 5. 담당자의 의견·추측(예: "~로 보임", "~가 필요해 보임", "우울해 보임")은 사실이 아니므로 내지 않는다.
@@ -43,6 +43,15 @@ ${needList}
 - person의 key (relation에 대상자와의 관계를 기록에 적힌 말로 쓴다. 대상자 자신은 "본인"):
 ${personList}
 - service: key는 "text", value에 서비스 이름과 기관, 이용 상태를 적힌 대로.
+
+[예시]
+기록: "2차 방문. 월세 25만원 두 달 밀림. 아들 있는데 연락 안 한 지 5년. 할머니가 혼자 사신다고 함."
+출력: {"facts": [
+ {"category": "need", "key": "economy", "value": "월세 25만원 2개월 밀림", "evidence": "월세 25만원 두 달 밀림.", "speaker": "client"},
+ {"category": "person", "key": "contactFrequency", "relation": "아들", "value": "아들과 5년간 연락 안 함", "evidence": "아들 있는데 연락 안 한 지 5년.", "speaker": "client"},
+ {"category": "general", "key": "householdType", "value": "1인가구", "evidence": "할머니가 혼자 사신다고 함.", "speaker": "client"}
+]}
+category 자리에는 general, need, person, service만 쓴다. 욕구 영역 이름(health, economy 등)은 category가 아니라 key에 쓴다.
 
 [speaker]
 ${speakerList}

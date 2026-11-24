@@ -34,7 +34,7 @@ export const VIRTUAL_CASES: VirtualCase[] = [
       { category: 'need', key: 'health', contains: ['무릎'] },
       { category: 'need', key: 'economy', contains: ['25만'] },
       { category: 'person', key: 'contactFrequency', contains: ['5년'] },
-      { category: 'need', key: 'safety', contains: ['넘어'] },
+      { category: 'need', key: 'safety', contains: ['넘어|넘어지'] },
     ],
     forbid: ['골절', '관절염', '치매', '우울', '고독사'],
   },
@@ -167,7 +167,7 @@ export const VIRTUAL_CASES: VirtualCase[] = [
       },
     ],
     expect: [
-      { category: 'need', key: 'familySocialRelations', contains: ['다투'] },
+      { category: 'need', key: 'familySocialRelations', contains: ['다툼|다투'] },
       { category: 'need', key: 'economy', contains: ['30만'] },
       { category: 'person', key: 'age', contains: ['16'] },
       { category: 'person', key: 'age', contains: ['13'] },

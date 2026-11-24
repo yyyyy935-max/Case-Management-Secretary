@@ -1,5 +1,5 @@
-import type { AiProvider, AiRequest } from './provider.ts';
-import { AiCallError } from './provider.ts';
+import type { AiProvider, AiRequest, AiUsage } from './provider.ts';
+import { AiCallError, withRetry } from './provider.ts';
 
 /**
  * Google Gemini API 연결.
@@ -12,7 +12,8 @@ const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 export class GeminiProvider implements AiProvider {
   readonly name = 'gemini';
-  private model?: string;
+  model?: string;
+  readonly usage: AiUsage = { calls: 0, inputTokens: 0, outputTokens: 0 };
 
   constructor(private apiKey: string, model?: string, private fetchImpl: typeof fetch = fetch) {
     this.model = model || undefined;
@@ -49,12 +50,16 @@ export class GeminiProvider implements AiProvider {
         ...(req.responseSchema ? { responseSchema: req.responseSchema } : {}),
       },
     };
-    const res = await this.fetchImpl(`${BASE}/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: this.headers(), body: JSON.stringify(body) });
+    const res = await withRetry(() => this.fetchImpl(`${BASE}/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: this.headers(), body: JSON.stringify(body) }));
     if (!res.ok) {
       const hint = res.status === 400 ? '요청 형식' : res.status === 401 || res.status === 403 ? 'API 키 또는 권한' : res.status === 429 ? '사용 한도' : '서버 상태';
       throw new AiCallError(`Gemini 호출 실패(HTTP ${res.status}, ${hint}을 확인하세요).`);
     }
-    const json = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[] };
+    const json = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number } };
+    this.usage.calls++;
+    this.usage.inputTokens += json.usageMetadata?.promptTokenCount ?? 0;
+    // 생각에 쓴 토큰도 출력 요금으로 청구되므로 함께 센다
+    this.usage.outputTokens += (json.usageMetadata?.candidatesTokenCount ?? 0) + (json.usageMetadata?.thoughtsTokenCount ?? 0);
     const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
     if (!text) throw new AiCallError(`Gemini 응답이 비어 있습니다(${json.candidates?.[0]?.finishReason ?? '이유 모름'}).`);
     return text;
