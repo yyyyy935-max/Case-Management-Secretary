@@ -1,0 +1,2 @@
+# Windows 실행 파일은 CRLF 줄바꿈과 CP949(한글 Windows 기본) 인코딩을 그대로 유지한다
+*.bat -text

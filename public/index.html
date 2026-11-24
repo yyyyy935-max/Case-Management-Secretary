@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>사례비서</title>
+  <link rel="stylesheet" href="common.css">
+</head>
+<body>
+  <nav class="nav"><a href="/" aria-current="page">사례비서</a><a href="/cases.html">사례 카드</a><a href="/forms.html">양식 채우기</a></nav>
+  <main class="wrap">
+  <h1>사례비서</h1>
+  <p>실행 상태입니다. 아래 표가 채워지면 정상적으로 실행된 것입니다. 양식을 분석하려면 위의 <a href="/forms.html">양식 채우기</a>를 누르세요.</p>
+  <table id="status" class="status"><tr><td>불러오는 중…</td></tr></table>
+  <script>
+    fetch('/api/status').then(r => r.json()).then(s => {
+      const rows = [
+        ['상태', '<span class="ok">실행 중</span>'],
+        ['버전', s.version + ' (' + s.stage + '단계)'],
+        ['설정 파일', s.configFile],
+        ['체크 기호', s.checkMark],
+        ['AI 제공자', s.ai.provider + ' / API 키: ' + (s.ai.apiKeySet ? '<span class="ok">입력됨</span>' : '<span class="warn">아직 없음 (3단계부터 필요)</span>')],
+        ['test-data/forms 양식 파일', s.testData.forms.length + '개' + (s.testData.forms.length ? '<br>' + s.testData.forms.map(escapeHtml).join('<br>') : '')],
+        ['test-data/cases 가상 사례', s.testData.cases.length + '개'],
+      ];
+      document.getElementById('status').innerHTML = rows.map(([k, v]) => '<tr><th>' + k + '</th><td>' + v + '</td></tr>').join('');
+    }).catch(() => {
+      document.getElementById('status').innerHTML = '<tr><td class="warn">서버에 연결하지 못했습니다. 검은 창이 켜져 있는지 확인하세요.</td></tr>';
+    });
+    function escapeHtml(t) { return t.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  </script>
+  </main>
+</body>
+</html>

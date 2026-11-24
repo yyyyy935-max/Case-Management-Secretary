@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>양식 채우기 - 사례비서</title>
+  <link rel="stylesheet" href="common.css">
+  <style>
+    .upload { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 16px; border: 1px dashed var(--line-strong); border-radius: 8px; background: var(--panel); }
+    .upload input[type=file] { font-size: 14px; }
+    .note { color: var(--muted); font-size: 13px; }
+    .error { color: var(--danger); font-weight: 600; }
+    .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 16px 0 8px; }
+    select { font-size: 15px; padding: 6px 8px; max-width: 100%; }
+    .layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); gap: 16px; align-items: start; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+    .preview { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 16px; overflow-x: auto; }
+    .preview h3 { font-size: 14px; margin: 18px 0 6px; color: var(--muted); font-weight: 600; }
+    .preview h3:first-child { margin-top: 0; }
+    .ftable { border-collapse: collapse; width: 100%; font-size: 12px; margin-bottom: 4px; }
+    .ftable td { border: 1px solid #b9bec7; padding: 4px 5px; vertical-align: middle; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; cursor: pointer; position: relative; }
+    .ftable td.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
+    .ftable td.dim { opacity: .25; }
+    .ftable .ftable { margin: 4px 0; }
+    .empty-mark { color: #9aa0a8; font-style: italic; }
+    .bodyp { font-size: 12px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; margin: 4px 0; cursor: pointer; white-space: pre-wrap; }
+    .side { position: sticky; top: 12px; max-height: calc(100vh - 24px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px; border-bottom: 1px solid var(--line); }
+    .chip { border: 1px solid var(--line-strong); background: #fff; border-radius: 999px; padding: 4px 10px; font-size: 13px; cursor: pointer; }
+    .chip[aria-pressed=true] { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .list { overflow-y: auto; padding: 4px 0; }
+    .item { padding: 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px; }
+    .item:hover, .item.sel { background: #eef4ff; }
+    .item .top { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .item .id { color: var(--muted); font-family: Consolas, monospace; font-size: 12px; }
+    .item .txt { margin-top: 3px; }
+    .item .why { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .item .warn { color: var(--danger); font-size: 12px; margin-top: 3px; }
+    .btn { font-size: 14px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+    .btn:disabled { background: #fff; color: var(--muted); border-color: var(--line-strong); cursor: default; }
+    .item select { font-size: 12px; margin-left: auto; }
+    .review { background: #fff1f0; color: var(--danger); border-color: #f5b5ae; }
+    .changed { background: #e8f0ff; color: var(--accent); border-color: #a9c1f5; }
+    .ftable td.warn-cell::after { content: '?'; position: absolute; top: 1px; right: 3px; font-size: 10px; font-weight: 700; color: var(--danger); }
+    .editor { margin-top: 8px; padding: 8px; background: #fff; border: 1px solid var(--line-strong); border-radius: 6px; cursor: default; }
+    .editor textarea { width: 100%; min-height: 64px; font: inherit; font-size: 13px; padding: 6px; box-sizing: border-box; }
+    .editor .opts label { display: inline-flex; gap: 4px; align-items: center; margin: 2px 10px 2px 0; font-size: 13px; }
+    .editor .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .editor .caution { font-size: 12px; color: var(--danger); margin-bottom: 4px; }
+    .hasval { background: #e6f6ea; color: #1a7f37; border-color: #9fd3a7; }
+    .ftable td.val-cell { box-shadow: inset 0 0 0 2px #1a7f37; }
+    .fillres { margin: 12px 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+    .fillres table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 6px 0; }
+    .fillres th, .fillres td { border: 1px solid var(--line-strong); padding: 4px 8px; text-align: left; vertical-align: top; }
+    .fillres .pass { color: var(--ok); font-weight: 700; } .fillres .fail { color: var(--danger); font-weight: 700; }
+    .pages { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+    .pages figure { margin: 0; background: #fff; border: 1px solid var(--line); }
+    .pages figcaption { font-size: 12px; color: var(--muted); padding: 4px 8px; }
+    .pages img { width: 100%; display: block; }
+    .badge { display: inline-block; border-radius: 4px; padding: 1px 6px; font-size: 12px; font-weight: 700; border: 1px solid transparent; }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px; }
+    /* 역할별 색 */
+    .r-label { background: #e9ecf1; } .b-label { background: #e9ecf1; color: #3d4450; border-color: #c9ced6; }
+    .r-input { background: #e2f0ff; } .b-input { background: #e2f0ff; color: #0b4f9c; border-color: #9cc6f2; }
+    .r-checkbox_group { background: #e3f5e5; } .b-checkbox_group { background: #e3f5e5; color: #1d6b2a; border-color: #9fd3a7; }
+    .r-guide { background: #fff4cc; } .b-guide { background: #fff4cc; color: #7a5a00; border-color: #e8cf73; }
+    .r-judgment { background: #ffe0e6; } .b-judgment { background: #ffe0e6; color: #a1173a; border-color: #f2a3b5; }
+    .r-signature { background: #efe3fa; } .b-signature { background: #efe3fa; color: #6a2a99; border-color: #cfaeea; }
+    .r-personal { background: #ffe9d6; } .b-personal { background: #ffe9d6; color: #9a4a00; border-color: #f3bd8c; }
+    .r-fixed { background: #fff; color: #555; } .b-fixed { background: #fff; color: #555; border-color: #ccc; }
+  </style>
+</head>
+<body>
+  <nav class="nav"><a href="/">사례비서</a><a href="/cases.html">사례 카드</a><a href="/forms.html" aria-current="page">양식 채우기</a></nav>
+  <main class="wrap wide">
+    <h1>양식 채우기</h1>
+    <p class="note">기관 양식 파일(한글 HWP, HWPX, Word)을 올리면 항목마다 담당자가 쓰는 곳인지, 체크 항목인지, 서명란이나 담당자 판단 항목인지 나눠 보여 줍니다. 오른쪽 목록에서 항목을 누르면 내용을 넣을 수 있고, <b>채운 파일 만들기</b>를 누르면 원본 양식 모양 그대로 채운 파일을 만듭니다. 원본 파일은 바꾸지 않으며, 파일은 이 PC 안에서만 다루고 따로 보관하지 않습니다.</p>
+
+    <div class="upload">
+      <input type="file" id="file" accept=".hwp,.hwpx,.docx">
+      <span id="status" class="note">파일을 고르면 바로 분석합니다.</span>
+    </div>
+
+    <div id="result" hidden>
+      <div class="toolbar">
+        <label>양식 <select id="group"></select></label>
+        <span id="summary" class="note"></span>
+        <span id="tplStatus" class="note"></span>
+        <button id="save" class="btn" disabled>고친 구분 저장</button>
+        <button id="fill" class="btn" disabled>채운 파일 만들기</button>
+      </div>
+      <section id="fillResult" class="fillres" hidden></section>
+      <div class="legend" id="legend"></div>
+      <div class="layout" style="margin-top:12px">
+        <section class="preview" id="preview" aria-label="양식 미리보기"></section>
+        <aside class="side" aria-label="항목 목록">
+          <div class="chips" id="chips"></div>
+          <div class="list" id="list"></div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let data = null, byId = new Map(), filter = null, selected = null, overrides = {}, dirty = false, fileName = '', currentFile = null, values = {};
+    const cellById = new Map();
+    const BOX = /[□☐▢◻\u{F02EB}]/u;
+    /** 칸 글에서 "□ 가정방문" 같은 선택지 이름 목록 (서버의 boxOptions와 같은 규칙) */
+    function boxOptions(text) {
+      const cps = [...text]; const out = [];
+      for (let i = 0; i < cps.length; i++) {
+        if (!BOX.test(cps[i])) continue;
+        let j = i + 1; while (j < cps.length && !BOX.test(cps[j]) && cps[j] !== '\n') j++;
+        let label = cps.slice(i + 1, j).join('').trim();
+        if (!label) { let k = i - 1; while (k >= 0 && !BOX.test(cps[k]) && cps[k] !== '\n') k--; label = cps.slice(k + 1, i).join('').trim(); }
+        out.push(label);
+      }
+      return out;
+    }
+
+    $('file').addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      $('status').className = 'note';
+      $('status').textContent = `"${f.name}" 분석 중…`;
+      $('result').hidden = true;
+      try {
+        const res = await fetch('/api/forms/analyze', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || '분석하지 못했습니다.');
+        data = json;
+        fileName = f.name;
+        currentFile = f;
+        values = {};
+        cellById.clear();
+        for (const t of data.document.tables) for (const c of t.cells) cellById.set(c.id, c);
+        $('fillResult').hidden = true;
+        overrides = { ...(data.template?.overrides || {}) };
+        dirty = false;
+        byId = new Map([...data.classification.cells, ...data.classification.body].map((c) => [c.id, c]));
+        const d = data.document;
+        $('status').textContent = `"${f.name}" 파일을 읽었습니다. 위의 양식 목록에서 채울 기록지를 고르세요.`;
+        const groups = [...new Set(d.tables.map((t) => t.groupTitle || '(제목 없는 양식)'))];
+        $('group').innerHTML = groups.map((g) => `<option>${esc(g)}</option>`).join('');
+        $('legend').innerHTML = Object.entries(data.roleNames).map(([k, v]) => `<span class="badge b-${k}">${esc(v)}</span>`).join('');
+        filter = null; selected = null;
+        updateTplStatus();
+        updateFillButton();
+        render();
+        $('result').hidden = false;
+      } catch (err) {
+        $('status').className = 'error';
+        $('status').textContent = err.message;
+      }
+    });
+    $('group').addEventListener('change', () => { filter = null; selected = null; render(); });
+
+    function currentGroup() { return $('group').value; }
+
+    function render() {
+      const g = currentGroup();
+      const d = data.document;
+      const tables = d.tables.filter((t) => (t.groupTitle || '(제목 없는 양식)') === g);
+      const body = d.bodyParagraphs.filter((b) => (b.groupTitle || '(제목 없는 양식)') === g);
+      const top = tables.filter((t) => !t.parentCellId);
+      const tableByIndex = new Map(d.tables.map((t) => [t.index, t]));
+
+      // 미리보기
+      let html = '';
+      for (const t of top) {
+        const caption = t.precedingTexts.at(-1);
+        html += `<h3>표 ${t.index + 1}${caption ? ' · ' + esc(caption.slice(0, 40)) : ''}</h3>` + tableHtml(t, tableByIndex);
+      }
+      if (body.length) {
+        html += `<h3>표 밖의 글</h3>` + body.map((b) => {
+          const c = byId.get(b.id);
+          return `<div class="bodyp r-${c.role}" data-id="${b.id}">${esc(b.paragraph.text.trim())}</div>`;
+        }).join('');
+      }
+      $('preview').innerHTML = html;
+
+      // 칸 목록
+      const items = [...tables.flatMap((t) => t.cells.map((c) => ({ cell: c, cls: byId.get(c.id) }))), ...body.map((b) => ({ cell: { id: b.id, text: b.paragraph.text }, cls: byId.get(b.id) }))];
+      const counts = {};
+      for (const it of items) counts[it.cls.role] = (counts[it.cls.role] || 0) + 1;
+      $('summary').textContent = `항목 ${items.length}개`;
+      const reviewCount = items.filter((it) => it.cls.warning).length;
+      $('chips').innerHTML = `<button class="chip" data-role="" aria-pressed="${!filter}">전체 ${items.length}</button>` +
+        (reviewCount ? `<button class="chip" data-role="__review" aria-pressed="${filter === '__review'}">확인 필요 ${reviewCount}</button>` : '') +
+        Object.entries(data.roleNames).filter(([k]) => counts[k]).map(([k, v]) => `<button class="chip" data-role="${k}" aria-pressed="${filter === k}">${esc(v)} ${counts[k]}</button>`).join('');
+      const match = (cls) => !filter || (filter === '__review' ? !!cls.warning : cls.role === filter);
+      const shown = items.filter((it) => match(it.cls));
+      $('list').innerHTML = shown.map(({ cell, cls }) => {
+        const labels = [cls.rowLabel, cls.colLabel].filter(Boolean).join(' / ');
+        return `<div class="item" data-id="${cell.id}">
+          <div class="top"><span class="badge b-${cls.role}">${esc(data.roleNames[cls.role])}</span>${values[cell.id] ? '<span class="badge hasval">값 넣음</span>' : ''}${cls.warning ? '<span class="badge review">확인 필요</span>' : ''}${cls.source === 'template' ? '<span class="badge changed">담당자가 고침</span>' : ''}${labels ? `<span>${esc(labels)}</span>` : ''}
+            <select data-id="${cell.id}" aria-label="구분 바꾸기">${Object.entries(data.roleNames).map(([k, v]) => `<option value="${k}"${k === cls.role ? ' selected' : ''}>${esc(v)}${k === cls.ruleRole ? ' (처음 판단)' : ''}</option>`).join('')}</select></div>
+          ${cell.text.trim() ? `<div class="txt">${esc(cell.text.trim().replace(/\s+/g, ' ').slice(0, 80))}</div>` : ''}
+          <div class="why">${esc(cls.reason)}</div>
+          ${cls.warning ? `<div class="warn">⚠ ${esc(cls.warning)}</div>` : ''}
+          <div class="editor-slot"></div>
+        </div>`;
+      }).join('') || '<div class="item">해당하는 항목이 없습니다.</div>';
+
+      document.querySelectorAll('#preview td[data-id]').forEach((td) => {
+        const c = byId.get(td.dataset.id);
+        td.classList.toggle('dim', !match(c));
+        td.classList.toggle('warn-cell', !!c.warning);
+        td.classList.toggle('val-cell', !!values[td.dataset.id]);
+      });
+      if (selected) select(selected, false);
+    }
+
+    function tableHtml(t, tableByIndex) {
+      const total = t.cells.filter((c) => c.row === 0).reduce((s, c) => s + (c.widthMm || 0), 0) || 1;
+      const rows = [];
+      for (const c of t.cells) (rows[c.row] ||= []).push(c);
+      let h = '<table class="ftable"><tbody>';
+      for (let r = 0; r < t.rows; r++) {
+        h += '<tr>';
+        for (const c of rows[r] || []) {
+          const cls = byId.get(c.id);
+          const w = c.widthMm ? ` style="width:${(c.widthMm / total * 100).toFixed(1)}%"` : '';
+          const inner = c.nestedTableIndexes.length
+            ? c.nestedTableIndexes.map((i) => tableHtml(tableByIndex.get(i), tableByIndex)).join('')
+            : (c.text.trim() ? esc(c.text.trim()) : '<span class="empty-mark">빈칸</span>');
+          h += `<td data-id="${c.id}" class="r-${cls.role}" rowspan="${c.rowSpan}" colspan="${c.colSpan}"${w} title="${esc(data.roleNames[cls.role] + ' · ' + cls.reason)}">${inner}</td>`;
+        }
+        h += '</tr>';
+      }
+      return h + '</tbody></table>';
+    }
+
+    function select(id, scroll = true) {
+      selected = id;
+      document.querySelectorAll('.sel').forEach((el) => el.classList.remove('sel'));
+      const cell = document.querySelector(`#preview [data-id="${id}"]`);
+      const item = document.querySelector(`#list [data-id="${id}"]`);
+      cell?.classList.add('sel');
+      item?.classList.add('sel');
+      document.querySelectorAll('.editor-slot').forEach((el) => { el.innerHTML = ''; });
+      const slot = item?.querySelector('.editor-slot');
+      if (slot) slot.innerHTML = editorHtml(id);
+      if (scroll) { cell?.scrollIntoView({ block: 'center', behavior: 'smooth' }); item?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    }
+
+    $('list').addEventListener('change', (e) => {
+      const sel = e.target.closest('select[data-id]');
+      if (!sel) return;
+      const c = byId.get(sel.dataset.id);
+      const role = sel.value;
+      if (role === c.ruleRole) delete overrides[c.id]; else overrides[c.id] = role;
+      c.role = role;
+      c.source = overrides[c.id] ? 'template' : 'rule';
+      c.reason = overrides[c.id] ? `담당자가 고침 (처음 판단: ${data.roleNames[c.ruleRole]})` : c.reason.replace(/^담당자가 고침.*$/, '처음 판단으로 되돌림');
+      if (overrides[c.id]) c.warning = undefined;
+      dirty = true;
+      updateTplStatus();
+      const keep = sel.dataset.id;
+      render();
+      select(keep, false);
+    });
+    $('save').addEventListener('click', async () => {
+      $('save').disabled = true;
+      try {
+        const res = await fetch(`/api/forms/templates/${data.fingerprint}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fileName, format: data.document.format, overrides }) });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || '저장하지 못했습니다.');
+        data.template = json;
+        dirty = false;
+        updateTplStatus('저장했습니다. 같은 양식을 다시 올리면 고친 구분이 그대로 적용됩니다.');
+      } catch (err) {
+        updateTplStatus(err.message);
+      }
+    });
+    function editorHtml(id) {
+      const c = cellById.get(id);
+      const cls = byId.get(id);
+      if (!c) return '<div class="editor"><div class="hint">표 밖의 글은 아직 채울 수 없습니다.</div></div>';
+      if (cls.role === 'label' || cls.role === 'fixed') return '<div class="editor"><div class="hint">항목 이름과 인쇄된 글은 바꾸지 않습니다. 구분이 틀렸으면 위 선택 상자에서 바꾸세요.</div></div>';
+      if (c.nestedTableIndexes.length) return '<div class="editor"><div class="hint">안에 작은 표가 있는 항목입니다. 안쪽 표의 항목을 눌러 채우세요.</div></div>';
+      const caution = ['judgment', 'signature', 'personal'].includes(cls.role) ? `<div class="caution">${esc(data.roleNames[cls.role])} 항목입니다. 담당자가 직접 정한 내용만 넣으세요. AI는 이 항목을 채우지 않습니다.</div>` : '';
+      const opts = boxOptions(c.text);
+      if (opts.length) {
+        const checked = new Set(values[id]?.check || []);
+        return `<div class="editor" data-ed="${id}">${caution}<div class="opts">${opts.map((o) => `<label><input type="checkbox" data-opt="${esc(o)}"${checked.has(o) ? ' checked' : ''}>${esc(o || '(이름 없는 체크 칸)')}</label>`).join('')}</div><div class="hint">체크한 항목의 □만 체크 표시로 바뀝니다.</div></div>`;
+      }
+      const isTemplate = cls.inputKind === 'template' || cls.inputKind === 'prompt';
+      const v = values[id]?.text ?? (isTemplate ? c.text : '');
+      return `<div class="editor" data-ed="${id}">${caution}<textarea data-text>${esc(v)}</textarea><div class="hint">${cls.role === 'guide' ? '안내 문구는 지워지고 이 글이 일반 서식으로 들어갑니다. ' : ''}${isTemplate ? '인쇄된 글에서 빈자리를 채우세요. ' : ''}줄을 바꾸면 한글에서도 줄이 바뀝니다. 비워 두면 이 항목은 그대로 둡니다.</div></div>`;
+    }
+
+    function setValue(id, v) {
+      if (v) values[id] = v; else delete values[id];
+      updateFillButton();
+      const item = document.querySelector(`#list .item[data-id="${id}"] .top`);
+      if (item) {
+        const has = item.querySelector('.hasval');
+        if (v && !has) item.children[0].insertAdjacentHTML('afterend', '<span class="badge hasval">값 넣음</span>');
+        if (!v && has) has.remove();
+      }
+      document.querySelector(`#preview td[data-id="${id}"]`)?.classList.toggle('val-cell', !!v);
+    }
+
+    $('list').addEventListener('input', (e) => {
+      const ed = e.target.closest('[data-ed]');
+      if (!ed) return;
+      const id = ed.dataset.ed;
+      if (e.target.matches('textarea[data-text]')) {
+        const c = cellById.get(id);
+        const t = e.target.value;
+        setValue(id, t.trim() && t !== c.text ? { text: t } : null);
+      } else if (e.target.matches('input[data-opt]')) {
+        const check = [...ed.querySelectorAll('input[data-opt]:checked')].map((x) => x.dataset.opt);
+        setValue(id, check.length ? { check } : null);
+      }
+    });
+
+    function updateFillButton() {
+      const n = Object.keys(values).length;
+      $('fill').disabled = n === 0;
+      $('fill').textContent = n ? `채운 파일 만들기 (${n}개 항목)` : '채운 파일 만들기';
+    }
+
+    const toBase64 = (file) => new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = fail; r.readAsDataURL(file); });
+    const svgUrl = (svg) => 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+
+    $('fill').addEventListener('click', async () => {
+      const box = $('fillResult');
+      box.hidden = false;
+      box.innerHTML = '파일을 만드는 중…';
+      $('fill').disabled = true;
+      try {
+        const res = await fetch('/api/forms/fill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileBase64: await toBase64(currentFile), fileName, values }) });
+        const r = await res.json();
+        if (!res.ok) throw new Error(r.error || '파일을 만들지 못했습니다.');
+        const blob = new Blob([Uint8Array.from(atob(r.fileBase64), (ch) => ch.charCodeAt(0))]);
+        const url = URL.createObjectURL(blob);
+        const okAll = r.checks.every((c) => c.ok);
+        const label = (id) => { const c = byId.get(id); return [c?.rowLabel, c?.colLabel].filter(Boolean).join(' / ') || '이름 없는 항목'; };
+        box.innerHTML = `
+          <p><b>${okAll ? '원본 양식 모양이 그대로인지 확인했고 문제가 없습니다.' : '원본 양식과 다른 점이 있습니다. 아래 표를 확인하세요.'}</b> 채운 항목 ${r.applied.length}개${r.skipped.length ? `, 채우지 않은 항목 ${r.skipped.length}개` : ''}.
+          <a class="btn" style="text-decoration:none;margin-left:8px" href="${url}" download="${esc(r.fileName)}">${esc(r.fileName)} 내려받기</a></p>
+          <p class="note">한글(또는 Word)에서 직접 열어 모양을 꼭 확인하세요. 아래 쪽 그림은 사례비서가 어림해 그린 것이라 한글과 조금 다를 수 있습니다.</p>
+          <table><tr><th>확인한 것</th><th>결과</th><th>내용</th></tr>${r.checks.map((c) => `<tr><td>${esc(c.name)}</td><td class="${c.ok ? 'pass' : 'fail'}">${c.ok ? '이상 없음' : '확인 필요'}</td><td>${esc(c.detail)}</td></tr>`).join('')}</table>
+          ${r.warnings.length ? `<p><b>확인할 점</b></p><ul>${r.warnings.map((w) => `<li>${esc(label(w.id))}: ${esc(w.message)}</li>`).join('')}</ul>` : ''}
+          ${r.skipped.length ? `<p><b>채우지 않은 항목</b></p><ul>${r.skipped.map((w) => `<li>${esc(label(w.id))}: ${esc(w.message)}</li>`).join('')}</ul>` : ''}
+          ${r.previews.length ? `<p><b>쪽 비교</b> (내용을 넣은 쪽)</p>${r.previews.map((p) => `<div class="pages"><figure><figcaption>${p.page}쪽 원본</figcaption><img alt="${p.page}쪽 원본" src="${svgUrl(p.before)}"></figure><figure><figcaption>${p.page}쪽 결과</figcaption><img alt="${p.page}쪽 결과" src="${svgUrl(p.after)}"></figure></div>`).join('')}` : ''}`;
+      } catch (err) {
+        box.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+      } finally {
+        updateFillButton();
+      }
+    });
+
+    function updateTplStatus(msg) {
+      const n = Object.keys(overrides).length;
+      $('save').disabled = !dirty;
+      $('tplStatus').textContent = msg || (dirty ? `구분을 고친 항목 ${n}개 (아직 저장 안 함)` : data.template ? `전에 저장한 이 양식의 구분을 적용함 (고친 항목 ${n}개)` : '');
+    }
+    $('chips').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (!b) return; filter = b.dataset.role || null; render(); });
+    $('list').addEventListener('click', (e) => { if (e.target.closest('.editor, select')) return; const it = e.target.closest('.item[data-id]'); if (it) select(it.dataset.id); });
+    $('preview').addEventListener('click', (e) => { const el = e.target.closest('[data-id]'); if (el) { e.stopPropagation(); if (filter) { filter = null; render(); } select(el.dataset.id); } });
+  </script>
+</body>
+</html>

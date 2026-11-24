@@ -1,0 +1,23 @@
+node_modules/
+
+# 설정 파일 (API 키가 들어감) - 저장소에 올리지 않음
+config.local.json
+
+# 사례 데이터 - 기관 PC에만 저장
+data/*
+!data/.gitkeep
+
+# 테스트 자료 - 표준 양식은 협회 저작물이므로 저장소에 올리지 않음
+test-data/forms/*
+!test-data/forms/.gitkeep
+test-data/reports/
+test-data/cases/*
+!test-data/cases/.gitkeep
+
+# 로그
+logs/
+*.log
+
+# 딥 리서치 작업 메모와 보고서 (조사 자료, 저장소에 올리지 않음)
+research_notes/
+reports/
