@@ -17,3 +17,7 @@ test-data/cases/*
 # 로그
 logs/
 *.log
+
+# 딥 리서치 작업 메모와 보고서 (조사 자료, 저장소에 올리지 않음)
+research_notes/
+reports/
