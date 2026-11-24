@@ -39,7 +39,7 @@ lines.push('');
 for (const g of groups) {
   lines.push(`## ${g}`, '');
   for (const t of doc.tables.filter((t) => (t.groupTitle ?? '(제목 없음)') === g)) {
-    lines.push(`### 표 ${t.index} (${t.rows}행 × ${t.cols}열)${t.parentCellId ? ` — ${t.parentCellId} 칸 안의 표` : ''}`, '');
+    lines.push(`### 표 ${t.index} (${t.rows}행 × ${t.cols}열)${t.parentCellId ? `, ${t.parentCellId} 칸 안의 표` : ''}`, '');
     lines.push('| 칸 | 역할 | 칸 안의 글 | 항목명(행 / 열) | 이유 |', '|---|---|---|---|---|');
     for (const c of t.cells) {
       const k = byId.get(c.id)!;

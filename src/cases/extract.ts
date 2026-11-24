@@ -11,7 +11,7 @@ import { verifyFacts, type VerifyResult } from './verify.ts';
  */
 
 const generalList = Object.entries(GENERAL_KEYS)
-  .map(([k, d]) => `  - ${k} (${d.label})${'options' in d ? `: 다음 중 하나${'multiple' in d && d.multiple ? '(여러 개면 쉼표로)' : ''} — ${d.options.join(', ')}` : 'hint' in d ? `: ${d.hint}` : ''}`)
+  .map(([k, d]) => `  - ${k} (${d.label})${'options' in d ? `: 다음 중 하나${'multiple' in d && d.multiple ? '(여러 개면 쉼표로)' : ''}: ${d.options.join(', ')}` : 'hint' in d ? `: ${d.hint}` : ''}`)
   .join('\n');
 const needList = Object.entries(NEED_AREAS).map(([k, l]) => `  - ${k} (${l})`).join('\n');
 const personList = Object.entries(PERSON_ATTRS).map(([k, l]) => `  - ${k} (${l})`).join('\n');
@@ -24,7 +24,7 @@ export const EXTRACT_SYSTEM = `너는 사회복지 사례관리 담당자를 돕
 [반드시 지킬 것]
 1. 기록에 적힌 것만 뽑는다. 짐작, 추론, 일반 상식으로 덧붙이지 않는다. 기록에 없으면 내지 않는다.
 2. evidence에는 그 사실이 적힌 기록 원문의 문장 전체를 글자 그대로 복사한다. 고치거나 요약하거나 맞춤법을 바로잡지 않는다. value에 쓴 내용이 모두 evidence 안에 있어야 한다.
-3. value는 근거 구절의 내용을 바꾸지 않는 짧고 평이한 문장으로 쓴다. 숫자·날짜·금액은 원문 그대로 쓴다. 원문에 없는 숫자를 쓰지 않는다.
+3. value는 근거 구절의 내용을 바꾸지 않고, 기록지에 쓰는 말투로 짧게 쓴다("~함", "~임", "~없음"으로 끝냄). 원문에 쓰인 낱말을 그대로 살려 쓴다. 숫자·날짜·금액은 원문 그대로 쓴다. 원문에 없는 숫자를 쓰지 않는다.
 4. 누가 말했거나 보았는지 speaker로 구분한다. 대상자의 바람·생각은 대상자의 말로 쓴다(예: 본인은 "줄이고 싶다"고 함).
 5. 담당자의 의견·추측(예: "~로 보임", "~가 필요해 보임", "우울해 보임")은 사실이 아니므로 내지 않는다.
 6. 진단명은 기록에 의사 진단으로 적혀 있을 때만, 누가 말했는지와 함께 쓴다. 증상을 보고 진단을 짐작하지 않는다.

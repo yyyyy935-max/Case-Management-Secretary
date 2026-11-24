@@ -63,7 +63,7 @@ test('HWPX: 안내 문구를 일반 서식으로 쓰고, 압축 안 파일 목�
   assert.deepEqual(r.skipped, []);
   const checks = await verifyFill(original, r, req(values));
   // 최소 구성의 시험용 HWPX라 rhwp는 열지 못한다. 나머지 검사는 모두 통과해야 한다
-  for (const c of checks.filter((c) => c.name !== '파일이 오류 없이 열림')) assert.ok(c.ok, `${c.name}: ${c.detail}`);
+  for (const c of checks.filter((c) => c.name !== '파일 열기')) assert.ok(c.ok, `${c.name}: ${c.detail}`);
   const after = await readForm(r.data);
   assert.ok(plain(cellOf(after, 't1-r2-c1')));
   assert.equal(cellOf(after, 't1-r2-c1').paragraphs.length, 2);

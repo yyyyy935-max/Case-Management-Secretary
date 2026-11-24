@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 import type { Element } from '@xmldom/xmldom';
 import type { FormDocument } from '../types.ts';
 import type { FillRequest, FillResult, FillWarning } from './types.ts';
-import type { CellPlan } from './plan.ts';
+import { isLongText, type CellPlan } from './plan.ts';
 import { applySplices, applyZipMethods, boxPositionsInText, escXml, kids, locate, zipMethods, type Located, type Splice } from './xml-splice.ts';
 import { loadRhwp } from './rhwp.ts';
 
@@ -98,6 +98,62 @@ class CharShapes {
   }
 }
 
+/** header.xml의 문단 모양. 가운데 정렬 문단 모양을 양쪽 정렬로 바꾼 것을 찾거나 새로 만든다 */
+class ParaShapes {
+  private bodies = new Map<string, string>();
+  private added: string[] = [];
+  private justifiedOf = new Map<string, string>();
+  private maxId = 0;
+
+  constructor(xml: string) {
+    const loc = locate(xml);
+    const all = loc.doc.getElementsByTagName('*');
+    for (let i = 0; i < all.length; i++) {
+      const el = all[i]!;
+      if (el.localName !== 'paraPr') continue;
+      const id = el.getAttribute('id') ?? '';
+      const r = loc.rangeOf(el);
+      this.bodies.set(id, xml.slice(r.start, r.end));
+      this.maxId = Math.max(this.maxId, Number(id) || 0);
+    }
+  }
+
+  isCenter(id: string) { return /<([\w]+:)?align\s[^>]*horizontal="CENTER"/.test(this.bodies.get(id) ?? ''); }
+
+  justified(id: string): string {
+    if (!this.isCenter(id)) return id;
+    const cached = this.justifiedOf.get(id);
+    if (cached) return cached;
+    const body = this.bodies.get(id)!.replace(/(<([\w]+:)?align\s[^>]*?)horizontal="CENTER"/g, '$1horizontal="JUSTIFY"');
+    const withoutId = (t: string) => t.replace(/\sid="[^"]*"/, '');
+    for (const [otherId, other] of this.bodies) {
+      if (withoutId(other) === withoutId(body)) { this.justifiedOf.set(id, otherId); return otherId; }
+    }
+    const newId = String(++this.maxId);
+    this.added.push(body.replace(/\sid="[^"]*"/, ` id="${newId}"`));
+    this.justifiedOf.set(id, newId);
+    return newId;
+  }
+
+  /** 새로 만든 문단 모양을 넣은 header.xml (글자 모양을 넣은 뒤의 header에 적용) */
+  output(xml: string): string {
+    if (!this.added.length) return xml;
+    const loc = locate(xml);
+    const all = loc.doc.getElementsByTagName('*');
+    let props: Element | undefined;
+    for (let i = 0; i < all.length; i++) if (all[i]!.localName === 'paraProperties') { props = all[i]!; break; }
+    if (!props) return xml;
+    const r = loc.rangeOf(props);
+    const open = xml.slice(r.start, r.openEnd);
+    const count = Number(open.match(/itemCnt="(\d+)"/)?.[1] ?? NaN);
+    const newOpen = Number.isFinite(count) ? open.replace(/itemCnt="\d+"/, `itemCnt="${count + this.added.length}"`) : open;
+    return applySplices(xml, [
+      { start: r.closeStart, end: r.closeStart, text: this.added.join('') },
+      { start: r.start, end: r.openEnd, text: newOpen },
+    ]);
+  }
+}
+
 /** 읽기(readHwpx)와 같은 순서로 표를 번호 매긴다: 본문 문단 → 실행 → 표, 표 안에서는 칸을 다 읽은 뒤 셀 안 표 */
 function collectTables(sections: { loc: Located }[]): { sec: number; el: Element }[] {
   const out: { sec: number; el: Element }[] = [];
@@ -145,6 +201,7 @@ export async function fillHwpx(original: Uint8Array, form: FormDocument, plans: 
   const methods = zipMethods(zip);
   const headerName = 'Contents/header.xml';
   const chars = new CharShapes(await zip.file(headerName)!.async('string'));
+  const paraShapes = new ParaShapes(await zip.file(headerName)!.async('string'));
   const names = Object.keys(zip.files)
     .filter((n) => /^Contents\/section\d+\.xml$/.test(n))
     .sort((a, b) => Number(a.match(/\d+/)![0]) - Number(b.match(/\d+/)![0]));
@@ -191,6 +248,11 @@ export async function fillHwpx(original: Uint8Array, form: FormDocument, plans: 
           for (const p of paras) { const v = p.getAttribute('paraPrIDRef') ?? ''; counts.set(v, (counts.get(v) ?? 0) + 1); }
           paraPr = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
         }
+        // 여러 줄이나 긴 글을 가운데 정렬 칸에 넣으면 양쪽 정렬로 넣는다(담당자가 한글에서 직접 쓸 때처럼)
+        if (paraPr === undefined && isLongText(plan.text)) {
+          const cur = paras[0]!.getAttribute('paraPrIDRef') ?? '';
+          if (paraShapes.isCenter(cur)) paraPr = paraShapes.justified(cur);
+        }
         const firstRunChar = (p: Element) => kids(p, 'run')[0]?.getAttribute('charPrIDRef') ?? '0';
         const normalize = plan.normalize || isGuideChar(chars.get(firstRunChar(paras[0]!)));
         const newParas = lines.map((line, k) => {
@@ -211,14 +273,14 @@ export async function fillHwpx(original: Uint8Array, form: FormDocument, plans: 
       applied.push(plan.cell.id);
       warnings.push(...plan.warnings.map((message) => ({ id: plan.cell.id, message })));
     } catch (err) {
-      skipped.push({ id: plan.cell.id, message: `쓰지 못함: ${err instanceof Error ? err.message : '알 수 없는 오류'}` });
+      skipped.push({ id: plan.cell.id, message: `이 항목에 쓰지 못함: ${err instanceof Error ? err.message : '알 수 없는 오류'}` });
     }
   }
 
   for (const s of sections) if (s.splices.length) zip.file(s.name, applySplices(s.xml, s.splices), { createFolders: false });
-  const header = chars.output();
+  const header = paraShapes.output(chars.output());
   if (header !== (await zip.file(headerName)!.async('string'))) zip.file(headerName, header, { createFolders: false });
-  // mimetype은 압축하지 않고 맨 앞에 둔다(HWPX 규칙) — 원래 압축 방식을 그대로 쓰므로 원본이 맞으면 결과도 맞다
+  // mimetype은 압축하지 않고 맨 앞에 둔다(HWPX 규칙). 원래 압축 방식을 그대로 쓰므로 원본이 맞으면 결과도 맞다
   methods.set('mimetype', 'STORE');
   applyZipMethods(zip, methods);
   const data = await zip.generateAsync({ type: 'uint8array', compressionOptions: { level: 6 } });

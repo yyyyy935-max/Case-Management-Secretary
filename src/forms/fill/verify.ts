@@ -23,12 +23,12 @@ export async function verifyFill(original: Uint8Array, result: FillResult, req: 
   try {
     after = await readForm(result.data);
   } catch (err) {
-    checks.push({ name: '결과 파일 읽기', ok: false, detail: err instanceof Error ? err.message : '읽지 못함' });
+    checks.push({ name: '만든 파일 열어 보기', ok: false, detail: `만든 파일을 다시 열지 못함 (${err instanceof Error ? err.message : '원인 모름'})` });
     return checks;
   }
 
   // 1. 형식
-  checks.push({ name: '형식이 원본과 같음', ok: after.format === before.format, detail: `원본 ${before.format.toUpperCase()} → 결과 ${after.format.toUpperCase()}` });
+  checks.push({ name: '파일 종류', ok: after.format === before.format, detail: after.format === before.format ? `원본과 같은 ${after.format.toUpperCase()} 파일` : `원본은 ${before.format.toUpperCase()}인데 결과는 ${after.format.toUpperCase()}` });
 
   // 2. 표·칸·병합 구조
   const shape = (d: FormDocument) => d.tables.map((t) => `${t.rows}x${t.cols}:` + t.cells.map((c) => `${c.id}/${c.rowSpan}x${c.colSpan}`).join(','));
@@ -36,9 +36,9 @@ export async function verifyFill(original: Uint8Array, result: FillResult, req: 
   const sa = shape(after);
   const diffTables = sb.map((s, i) => (s === sa[i] ? -1 : i)).filter((i) => i >= 0);
   checks.push({
-    name: '표 개수·칸 개수·병합 구조가 같음',
+    name: '표 모양',
     ok: sb.length === sa.length && diffTables.length === 0,
-    detail: `표 ${before.tables.length}→${after.tables.length}개, 칸 ${before.tables.reduce((n, t) => n + t.cells.length, 0)}→${after.tables.reduce((n, t) => n + t.cells.length, 0)}개${diffTables.length ? `, 구조가 다른 표: ${diffTables.join(', ')}` : ''}`,
+    detail: sb.length === sa.length && diffTables.length === 0 ? `표 ${before.tables.length}개 모두 원본과 같은 모양 (줄, 칸, 합친 칸)` : `원본과 모양이 달라진 표 ${diffTables.length || Math.abs(sb.length - sa.length)}개`,
   });
 
   // 3. 채우지 않은 칸은 글·서식이 같음
@@ -57,9 +57,9 @@ export async function verifyFill(original: Uint8Array, result: FillResult, req: 
     }
   }
   checks.push({
-    name: '채우지 않은 칸의 글과 서식이 같음',
+    name: '손대지 않은 항목',
     ok: changedUntouched.length === 0,
-    detail: `${untouched}칸 비교${changedUntouched.length ? `, 달라진 칸: ${changedUntouched.slice(0, 10).join(', ')}${changedUntouched.length > 10 ? ' 외' : ''}` : ''}`,
+    detail: changedUntouched.length ? `내용을 넣지 않았는데 글이나 글자 모양이 달라진 곳 ${changedUntouched.length}곳` : `내용을 넣지 않은 ${untouched}곳은 글과 글자 모양이 원본 그대로`,
   });
 
   // 4. 채운 칸에 값이 들어감
@@ -77,7 +77,7 @@ export async function verifyFill(original: Uint8Array, result: FillResult, req: 
       if (marks < 1 || boxesGone !== marks) wrong.push(id);
     }
   }
-  checks.push({ name: '채운 칸에 값이 들어감', ok: wrong.length === 0, detail: `${result.applied.length}칸${wrong.length ? `, 값이 다른 칸: ${wrong.join(', ')}` : ''}` });
+  checks.push({ name: '넣은 내용', ok: wrong.length === 0, detail: wrong.length ? `넣으려던 내용과 다르게 들어간 곳 ${wrong.length}곳` : `${result.applied.length}곳 모두 넣은 내용 그대로 들어감` });
 
   // 5. 파일이 오류 없이 열림 (여러 판독기)
   const openers: string[] = [];
@@ -96,12 +96,12 @@ export async function verifyFill(original: Uint8Array, result: FillResult, req: 
       openers.push('rhwp');
     } catch { failed.push('rhwp'); }
   }
-  checks.push({ name: '파일이 오류 없이 열림', ok: failed.length === 0, detail: `열림: ${openers.join(', ')}${failed.length ? ` / 못 엶: ${failed.join(', ')}` : ''}. 한글 프로그램 확인은 사람이 해야 함` });
+  checks.push({ name: '파일 열기', ok: failed.length === 0, detail: `${failed.length ? `문서 프로그램 ${openers.length + failed.length}종 중 ${failed.length}종에서 열리지 않음` : `문서 프로그램 ${openers.length}종에서 열림`}. 한글이나 Word에서는 직접 열어 확인해 주세요` });
 
   // 6. 쪽 수
   if (result.pages) {
     const changed = result.pages.after !== result.pages.before;
-    checks.push({ name: '쪽 수 변화', ok: true, detail: changed ? `${result.pages.before}쪽 → ${result.pages.after}쪽 (내용이 늘어 쪽이 바뀜, 한글에서 확인 필요)` : `${result.pages.before}쪽 그대로 (rhwp 조판 기준)` });
+    checks.push({ name: '쪽 수', ok: true, detail: changed ? `${result.pages.before}쪽에서 ${result.pages.after}쪽으로 바뀜. 내용이 길어 쪽이 늘었을 수 있으니 한글에서 확인해 주세요` : `${result.pages.before}쪽으로 원본과 같음` });
   }
   return checks;
 }

@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 import type { Element } from '@xmldom/xmldom';
 import type { FormDocument } from '../types.ts';
 import type { FillRequest, FillResult, FillWarning } from './types.ts';
-import type { CellPlan } from './plan.ts';
+import { isLongText, type CellPlan } from './plan.ts';
 import { applySplices, applyZipMethods, boxPositionsInText, escXml, kids, locate, zipMethods, type Located, type Splice } from './xml-splice.ts';
 
 /**
@@ -128,7 +128,9 @@ export async function fillDocx(original: Uint8Array, form: FormDocument, plans: 
           const r = loc.rangeOf(base);
           let open = xml.slice(r.start, r.openEnd);
           if (open.endsWith('/>')) open = open.slice(0, -2) + '>';
-          const pPr = guidePPr ?? pPrOf(base);
+          let pPr = guidePPr ?? pPrOf(base);
+          // 여러 줄이나 긴 글을 가운데 정렬 칸에 넣으면 양쪽 정렬로 넣는다
+          if (!guidePPr && isLongText(plan.text)) pPr = pPr.replace(/<w:jc\s+w:val="center"\s*\/>/, '<w:jc w:val="both"/>');
           let rPr = rPrOf(base);
           if (normalize) rPr = normalRPr(rPr);
           if (/^<w:rPr\s*\/>$|^<w:rPr>\s*<\/w:rPr>$/.test(rPr)) rPr = '';
@@ -140,7 +142,7 @@ export async function fillDocx(original: Uint8Array, form: FormDocument, plans: 
       applied.push(plan.cell.id);
       warnings.push(...plan.warnings.map((message) => ({ id: plan.cell.id, message })));
     } catch (err) {
-      skipped.push({ id: plan.cell.id, message: `쓰지 못함: ${err instanceof Error ? err.message : '알 수 없는 오류'}` });
+      skipped.push({ id: plan.cell.id, message: `이 항목에 쓰지 못함: ${err instanceof Error ? err.message : '알 수 없는 오류'}` });
     }
   }
   if (splices.length) zip.file(name, applySplices(xml, splices), { createFolders: false });

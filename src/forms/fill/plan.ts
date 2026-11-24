@@ -47,34 +47,34 @@ export function planFill(form: FormDocument, classes: CellClassification[], req:
       continue;
     }
     if (req.source === 'ai' && NEVER_AUTO.includes(role)) {
-      skipped.push({ id, message: '판단·서명·인적사항 칸은 자동으로 채우지 않음' });
+      skipped.push({ id, message: '담당자 판단, 서명, 인적사항은 자동으로 채우지 않음' });
       continue;
     }
     if (role === 'label' || role === 'fixed') {
-      skipped.push({ id, message: '항목명·고정 문구 칸은 바꾸지 않음' });
+      skipped.push({ id, message: '항목 이름과 인쇄된 글은 바꾸지 않음' });
       continue;
     }
     if (hit.cell.nestedTableIndexes.length) {
-      skipped.push({ id, message: '안쪽 표가 든 칸은 바꾸지 않음' });
+      skipped.push({ id, message: '안에 작은 표가 있는 항목은 바꾸지 않음' });
       continue;
     }
     const warnings: string[] = [];
     if (value.check && value.check.length) {
       if (value.text !== undefined) {
-        skipped.push({ id, message: '글과 체크를 한 칸에 함께 넣을 수 없음' });
+        skipped.push({ id, message: '한 항목에 글과 체크를 함께 넣을 수 없음' });
         continue;
       }
       const { indexes, missing } = findBoxes(hit.cell.text, value.check);
-      if (missing.length) warnings.push(`선택지를 찾지 못함: ${missing.join(', ')}`);
+      if (missing.length) warnings.push(`체크할 항목을 찾지 못함: ${missing.join(', ')}`);
       if (!indexes.length) {
-        skipped.push({ id, message: `체크할 선택지를 찾지 못함: ${value.check.join(', ')}` });
+        skipped.push({ id, message: `체크할 항목을 찾지 못함: ${value.check.join(', ')}` });
         continue;
       }
       plans.push({ cell: hit.cell, tableIndex: hit.tableIndex, role, warnings, kind: 'check', boxIndexes: indexes });
       continue;
     }
     if (value.text === undefined) {
-      skipped.push({ id, message: '넣을 값이 없음' });
+      skipped.push({ id, message: '넣을 내용이 없음' });
       continue;
     }
     const text = value.text.replace(/\r\n?/g, '\n');
@@ -84,3 +84,6 @@ export function planFill(form: FormDocument, classes: CellClassification[], req:
   }
   return { plans, skipped };
 }
+
+/** 여러 줄이거나 40자를 넘는 글. 가운데 정렬 칸에 넣으면 양쪽 정렬로 바꾼다 */
+export const isLongText = (t: string) => t.includes('\n') || [...t].length > 40;

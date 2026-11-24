@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>양식 칸 지도 - 사례비서</title>
+  <title>양식 채우기 - 사례비서</title>
   <link rel="stylesheet" href="common.css">
   <style>
     .upload { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 16px; border: 1px dashed var(--line-strong); border-radius: 8px; background: var(--panel); }
@@ -71,10 +71,10 @@
   </style>
 </head>
 <body>
-  <nav class="nav"><a href="/">사례비서</a><a href="/cases.html">사례 카드</a><a href="/forms.html" aria-current="page">양식 칸 지도</a></nav>
+  <nav class="nav"><a href="/">사례비서</a><a href="/cases.html">사례 카드</a><a href="/forms.html" aria-current="page">양식 채우기</a></nav>
   <main class="wrap wide">
-    <h1>양식 칸 지도</h1>
-    <p class="note">양식 파일(HWP, HWPX, DOCX)을 올리면 칸마다 역할을 나눠 보여 줍니다. 오른쪽 목록에서 칸을 누르면 값을 넣을 수 있고, <b>채운 파일 만들기</b>를 누르면 원본과 같은 형식의 파일을 만듭니다. 원본 파일은 바꾸지 않으며, 파일은 이 PC 안에서만 처리되고 저장되지 않습니다.</p>
+    <h1>양식 채우기</h1>
+    <p class="note">기관 양식 파일(한글 HWP, HWPX, Word)을 올리면 항목마다 담당자가 쓰는 곳인지, 체크 항목인지, 서명란이나 담당자 판단 항목인지 나눠 보여 줍니다. 오른쪽 목록에서 항목을 누르면 내용을 넣을 수 있고, <b>채운 파일 만들기</b>를 누르면 원본 양식 모양 그대로 채운 파일을 만듭니다. 원본 파일은 바꾸지 않으며, 파일은 이 PC 안에서만 다루고 따로 보관하지 않습니다.</p>
 
     <div class="upload">
       <input type="file" id="file" accept=".hwp,.hwpx,.docx">
@@ -86,14 +86,14 @@
         <label>양식 <select id="group"></select></label>
         <span id="summary" class="note"></span>
         <span id="tplStatus" class="note"></span>
-        <button id="save" class="btn" disabled>고친 역할 저장</button>
+        <button id="save" class="btn" disabled>고친 구분 저장</button>
         <button id="fill" class="btn" disabled>채운 파일 만들기</button>
       </div>
       <section id="fillResult" class="fillres" hidden></section>
       <div class="legend" id="legend"></div>
       <div class="layout" style="margin-top:12px">
         <section class="preview" id="preview" aria-label="양식 미리보기"></section>
-        <aside class="side" aria-label="칸 목록">
+        <aside class="side" aria-label="항목 목록">
           <div class="chips" id="chips"></div>
           <div class="list" id="list"></div>
         </aside>
@@ -141,8 +141,8 @@
         dirty = false;
         byId = new Map([...data.classification.cells, ...data.classification.body].map((c) => [c.id, c]));
         const d = data.document;
-        $('status').textContent = `"${f.name}" — ${d.format.toUpperCase()}, 표 ${d.tables.length}개, 칸 ${data.classification.cells.length}개`;
-        const groups = [...new Set(d.tables.map((t) => t.groupTitle || '(제목 없음)'))];
+        $('status').textContent = `"${f.name}" 파일을 읽었습니다. 위의 양식 목록에서 채울 기록지를 고르세요.`;
+        const groups = [...new Set(d.tables.map((t) => t.groupTitle || '(제목 없는 양식)'))];
         $('group').innerHTML = groups.map((g) => `<option>${esc(g)}</option>`).join('');
         $('legend').innerHTML = Object.entries(data.roleNames).map(([k, v]) => `<span class="badge b-${k}">${esc(v)}</span>`).join('');
         filter = null; selected = null;
@@ -162,8 +162,8 @@
     function render() {
       const g = currentGroup();
       const d = data.document;
-      const tables = d.tables.filter((t) => (t.groupTitle || '(제목 없음)') === g);
-      const body = d.bodyParagraphs.filter((b) => (b.groupTitle || '(제목 없음)') === g);
+      const tables = d.tables.filter((t) => (t.groupTitle || '(제목 없는 양식)') === g);
+      const body = d.bodyParagraphs.filter((b) => (b.groupTitle || '(제목 없는 양식)') === g);
       const top = tables.filter((t) => !t.parentCellId);
       const tableByIndex = new Map(d.tables.map((t) => [t.index, t]));
 
@@ -171,10 +171,10 @@
       let html = '';
       for (const t of top) {
         const caption = t.precedingTexts.at(-1);
-        html += `<h3>표 ${t.index}${caption ? ' · ' + esc(caption.slice(0, 40)) : ''}</h3>` + tableHtml(t, tableByIndex);
+        html += `<h3>표 ${t.index + 1}${caption ? ' · ' + esc(caption.slice(0, 40)) : ''}</h3>` + tableHtml(t, tableByIndex);
       }
       if (body.length) {
-        html += `<h3>본문 문단</h3>` + body.map((b) => {
+        html += `<h3>표 밖의 글</h3>` + body.map((b) => {
           const c = byId.get(b.id);
           return `<div class="bodyp r-${c.role}" data-id="${b.id}">${esc(b.paragraph.text.trim())}</div>`;
         }).join('');
@@ -185,7 +185,7 @@
       const items = [...tables.flatMap((t) => t.cells.map((c) => ({ cell: c, cls: byId.get(c.id) }))), ...body.map((b) => ({ cell: { id: b.id, text: b.paragraph.text }, cls: byId.get(b.id) }))];
       const counts = {};
       for (const it of items) counts[it.cls.role] = (counts[it.cls.role] || 0) + 1;
-      $('summary').textContent = `칸 ${items.length}개`;
+      $('summary').textContent = `항목 ${items.length}개`;
       const reviewCount = items.filter((it) => it.cls.warning).length;
       $('chips').innerHTML = `<button class="chip" data-role="" aria-pressed="${!filter}">전체 ${items.length}</button>` +
         (reviewCount ? `<button class="chip" data-role="__review" aria-pressed="${filter === '__review'}">확인 필요 ${reviewCount}</button>` : '') +
@@ -195,14 +195,14 @@
       $('list').innerHTML = shown.map(({ cell, cls }) => {
         const labels = [cls.rowLabel, cls.colLabel].filter(Boolean).join(' / ');
         return `<div class="item" data-id="${cell.id}">
-          <div class="top"><span class="badge b-${cls.role}">${esc(data.roleNames[cls.role])}</span>${values[cell.id] ? '<span class="badge hasval">값 넣음</span>' : ''}${cls.warning ? '<span class="badge review">확인 필요</span>' : ''}${cls.source === 'template' ? '<span class="badge changed">담당자가 정함</span>' : ''}<span class="id">${cell.id}</span>${labels ? `<span>${esc(labels)}</span>` : ''}
-            <select data-id="${cell.id}" aria-label="역할 바꾸기">${Object.entries(data.roleNames).map(([k, v]) => `<option value="${k}"${k === cls.role ? ' selected' : ''}>${esc(v)}${k === cls.ruleRole ? ' (규칙)' : ''}</option>`).join('')}</select></div>
+          <div class="top"><span class="badge b-${cls.role}">${esc(data.roleNames[cls.role])}</span>${values[cell.id] ? '<span class="badge hasval">값 넣음</span>' : ''}${cls.warning ? '<span class="badge review">확인 필요</span>' : ''}${cls.source === 'template' ? '<span class="badge changed">담당자가 고침</span>' : ''}${labels ? `<span>${esc(labels)}</span>` : ''}
+            <select data-id="${cell.id}" aria-label="구분 바꾸기">${Object.entries(data.roleNames).map(([k, v]) => `<option value="${k}"${k === cls.role ? ' selected' : ''}>${esc(v)}${k === cls.ruleRole ? ' (처음 판단)' : ''}</option>`).join('')}</select></div>
           ${cell.text.trim() ? `<div class="txt">${esc(cell.text.trim().replace(/\s+/g, ' ').slice(0, 80))}</div>` : ''}
           <div class="why">${esc(cls.reason)}</div>
           ${cls.warning ? `<div class="warn">⚠ ${esc(cls.warning)}</div>` : ''}
           <div class="editor-slot"></div>
         </div>`;
-      }).join('') || '<div class="item">해당하는 칸이 없습니다.</div>';
+      }).join('') || '<div class="item">해당하는 항목이 없습니다.</div>';
 
       document.querySelectorAll('#preview td[data-id]').forEach((td) => {
         const c = byId.get(td.dataset.id);
@@ -254,7 +254,7 @@
       if (role === c.ruleRole) delete overrides[c.id]; else overrides[c.id] = role;
       c.role = role;
       c.source = overrides[c.id] ? 'template' : 'rule';
-      c.reason = overrides[c.id] ? `담당자가 정함 (규칙 분류: ${data.roleNames[c.ruleRole]})` : c.reason.replace(/^담당자가 정함.*$/, '규칙 분류로 되돌림');
+      c.reason = overrides[c.id] ? `담당자가 고침 (처음 판단: ${data.roleNames[c.ruleRole]})` : c.reason.replace(/^담당자가 고침.*$/, '처음 판단으로 되돌림');
       if (overrides[c.id]) c.warning = undefined;
       dirty = true;
       updateTplStatus();
@@ -270,7 +270,7 @@
         if (!res.ok) throw new Error(json.error || '저장하지 못했습니다.');
         data.template = json;
         dirty = false;
-        updateTplStatus('저장했습니다. 같은 양식을 다시 올리면 고친 역할이 그대로 쓰입니다.');
+        updateTplStatus('저장했습니다. 같은 양식을 다시 올리면 고친 구분이 그대로 적용됩니다.');
       } catch (err) {
         updateTplStatus(err.message);
       }
@@ -278,18 +278,18 @@
     function editorHtml(id) {
       const c = cellById.get(id);
       const cls = byId.get(id);
-      if (!c) return '<div class="editor"><div class="hint">표 밖 문단 채우기는 아직 지원하지 않습니다.</div></div>';
-      if (cls.role === 'label' || cls.role === 'fixed') return '<div class="editor"><div class="hint">항목명·고정 문구 칸은 바꾸지 않습니다. 역할이 틀렸으면 위 선택 상자에서 바꾸세요.</div></div>';
-      if (c.nestedTableIndexes.length) return '<div class="editor"><div class="hint">안쪽 표가 든 칸입니다. 안쪽 표의 칸을 눌러 채우세요.</div></div>';
-      const caution = ['judgment', 'signature', 'personal'].includes(cls.role) ? `<div class="caution">${esc(data.roleNames[cls.role])} 칸입니다. 담당자가 직접 정한 값만 넣으세요. (나중에 AI는 이 칸을 채우지 않습니다)</div>` : '';
+      if (!c) return '<div class="editor"><div class="hint">표 밖의 글은 아직 채울 수 없습니다.</div></div>';
+      if (cls.role === 'label' || cls.role === 'fixed') return '<div class="editor"><div class="hint">항목 이름과 인쇄된 글은 바꾸지 않습니다. 구분이 틀렸으면 위 선택 상자에서 바꾸세요.</div></div>';
+      if (c.nestedTableIndexes.length) return '<div class="editor"><div class="hint">안에 작은 표가 있는 항목입니다. 안쪽 표의 항목을 눌러 채우세요.</div></div>';
+      const caution = ['judgment', 'signature', 'personal'].includes(cls.role) ? `<div class="caution">${esc(data.roleNames[cls.role])} 항목입니다. 담당자가 직접 정한 내용만 넣으세요. AI는 이 항목을 채우지 않습니다.</div>` : '';
       const opts = boxOptions(c.text);
       if (opts.length) {
         const checked = new Set(values[id]?.check || []);
-        return `<div class="editor" data-ed="${id}">${caution}<div class="opts">${opts.map((o) => `<label><input type="checkbox" data-opt="${esc(o)}"${checked.has(o) ? ' checked' : ''}>${esc(o || '(이름 없는 칸)')}</label>`).join('')}</div><div class="hint">체크한 선택지의 □만 체크 기호로 바뀝니다.</div></div>`;
+        return `<div class="editor" data-ed="${id}">${caution}<div class="opts">${opts.map((o) => `<label><input type="checkbox" data-opt="${esc(o)}"${checked.has(o) ? ' checked' : ''}>${esc(o || '(이름 없는 체크 칸)')}</label>`).join('')}</div><div class="hint">체크한 항목의 □만 체크 표시로 바뀝니다.</div></div>`;
       }
       const isTemplate = cls.inputKind === 'template' || cls.inputKind === 'prompt';
       const v = values[id]?.text ?? (isTemplate ? c.text : '');
-      return `<div class="editor" data-ed="${id}">${caution}<textarea data-text>${esc(v)}</textarea><div class="hint">${cls.role === 'guide' ? '안내 문구는 지워지고 이 글이 일반 서식으로 들어갑니다. ' : ''}${isTemplate ? '인쇄된 글을 고쳐 빈자리를 채우세요. ' : ''}줄을 바꾸면 문단이 나뉩니다. 비워 두면 이 칸은 바꾸지 않습니다.</div></div>`;
+      return `<div class="editor" data-ed="${id}">${caution}<textarea data-text>${esc(v)}</textarea><div class="hint">${cls.role === 'guide' ? '안내 문구는 지워지고 이 글이 일반 서식으로 들어갑니다. ' : ''}${isTemplate ? '인쇄된 글에서 빈자리를 채우세요. ' : ''}줄을 바꾸면 한글에서도 줄이 바뀝니다. 비워 두면 이 항목은 그대로 둡니다.</div></div>`;
     }
 
     function setValue(id, v) {
@@ -321,7 +321,7 @@
     function updateFillButton() {
       const n = Object.keys(values).length;
       $('fill').disabled = n === 0;
-      $('fill').textContent = n ? `채운 파일 만들기 (${n}칸)` : '채운 파일 만들기';
+      $('fill').textContent = n ? `채운 파일 만들기 (${n}개 항목)` : '채운 파일 만들기';
     }
 
     const toBase64 = (file) => new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = fail; r.readAsDataURL(file); });
@@ -339,15 +339,15 @@
         const blob = new Blob([Uint8Array.from(atob(r.fileBase64), (ch) => ch.charCodeAt(0))]);
         const url = URL.createObjectURL(blob);
         const okAll = r.checks.every((c) => c.ok);
-        const label = (id) => { const c = byId.get(id); return [c?.rowLabel, c?.colLabel].filter(Boolean).join(' / ') || id; };
+        const label = (id) => { const c = byId.get(id); return [c?.rowLabel, c?.colLabel].filter(Boolean).join(' / ') || '이름 없는 항목'; };
         box.innerHTML = `
-          <p><b>${okAll ? '자동 검사를 모두 통과했습니다.' : '자동 검사에서 문제가 있습니다.'}</b> 채운 칸 ${r.applied.length}개${r.skipped.length ? `, 쓰지 않은 칸 ${r.skipped.length}개` : ''}.
+          <p><b>${okAll ? '원본 양식 모양이 그대로인지 확인했고 문제가 없습니다.' : '원본 양식과 다른 점이 있습니다. 아래 표를 확인하세요.'}</b> 채운 항목 ${r.applied.length}개${r.skipped.length ? `, 채우지 않은 항목 ${r.skipped.length}개` : ''}.
           <a class="btn" style="text-decoration:none;margin-left:8px" href="${url}" download="${esc(r.fileName)}">${esc(r.fileName)} 내려받기</a></p>
           <p class="note">한글(또는 Word)에서 직접 열어 모양을 꼭 확인하세요. 아래 쪽 그림은 사례비서가 어림해 그린 것이라 한글과 조금 다를 수 있습니다.</p>
-          <table><tr><th>검사</th><th>결과</th><th>내용</th></tr>${r.checks.map((c) => `<tr><td>${esc(c.name)}</td><td class="${c.ok ? 'pass' : 'fail'}">${c.ok ? '통과' : '문제'}</td><td>${esc(c.detail)}</td></tr>`).join('')}</table>
-          ${r.warnings.length ? `<p><b>확인할 점</b></p><ul>${r.warnings.map((w) => `<li>${esc(label(w.id))} (${w.id}): ${esc(w.message)}</li>`).join('')}</ul>` : ''}
-          ${r.skipped.length ? `<p><b>쓰지 않은 칸</b></p><ul>${r.skipped.map((w) => `<li>${esc(label(w.id))} (${w.id}): ${esc(w.message)}</li>`).join('')}</ul>` : ''}
-          ${r.previews.length ? `<p><b>쪽 비교</b> (채운 칸이 있는 쪽)</p>${r.previews.map((p) => `<div class="pages"><figure><figcaption>${p.page}쪽 원본</figcaption><img alt="${p.page}쪽 원본" src="${svgUrl(p.before)}"></figure><figure><figcaption>${p.page}쪽 결과</figcaption><img alt="${p.page}쪽 결과" src="${svgUrl(p.after)}"></figure></div>`).join('')}` : ''}`;
+          <table><tr><th>확인한 것</th><th>결과</th><th>내용</th></tr>${r.checks.map((c) => `<tr><td>${esc(c.name)}</td><td class="${c.ok ? 'pass' : 'fail'}">${c.ok ? '이상 없음' : '확인 필요'}</td><td>${esc(c.detail)}</td></tr>`).join('')}</table>
+          ${r.warnings.length ? `<p><b>확인할 점</b></p><ul>${r.warnings.map((w) => `<li>${esc(label(w.id))}: ${esc(w.message)}</li>`).join('')}</ul>` : ''}
+          ${r.skipped.length ? `<p><b>채우지 않은 항목</b></p><ul>${r.skipped.map((w) => `<li>${esc(label(w.id))}: ${esc(w.message)}</li>`).join('')}</ul>` : ''}
+          ${r.previews.length ? `<p><b>쪽 비교</b> (내용을 넣은 쪽)</p>${r.previews.map((p) => `<div class="pages"><figure><figcaption>${p.page}쪽 원본</figcaption><img alt="${p.page}쪽 원본" src="${svgUrl(p.before)}"></figure><figure><figcaption>${p.page}쪽 결과</figcaption><img alt="${p.page}쪽 결과" src="${svgUrl(p.after)}"></figure></div>`).join('')}` : ''}`;
       } catch (err) {
         box.innerHTML = `<p class="error">${esc(err.message)}</p>`;
       } finally {
@@ -358,7 +358,7 @@
     function updateTplStatus(msg) {
       const n = Object.keys(overrides).length;
       $('save').disabled = !dirty;
-      $('tplStatus').textContent = msg || (dirty ? `고친 칸 ${n}개 (아직 저장 안 함)` : data.template ? `저장된 양식 템플릿 사용 중 (담당자가 정한 칸 ${n}개)` : '');
+      $('tplStatus').textContent = msg || (dirty ? `구분을 고친 항목 ${n}개 (아직 저장 안 함)` : data.template ? `전에 저장한 이 양식의 구분을 적용함 (고친 항목 ${n}개)` : '');
     }
     $('chips').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (!b) return; filter = b.dataset.role || null; render(); });
     $('list').addEventListener('click', (e) => { if (e.target.closest('.editor, select')) return; const it = e.target.closest('.item[data-id]'); if (it) select(it.dataset.id); });

@@ -1,6 +1,6 @@
 import type { FormCell, FormDocument, FormTable } from '../types.ts';
 import type { FillRequest, FillResult, FillWarning } from './types.ts';
-import type { CellPlan } from './plan.ts';
+import { isLongText, type CellPlan } from './plan.ts';
 import { loadRhwp } from './rhwp.ts';
 
 /*
@@ -174,12 +174,20 @@ export async function fillHwp(original: Uint8Array, form: FormDocument, plans: C
             doc.insertTextInCellByPath(SEC, loc.para, path(k), 0, line);
             if (normalize) doc.applyCharFormatInCellByPath(SEC, loc.para, path(k), 0, cpLen(line), NORMAL_PROPS);
           });
+          // 여러 줄이나 긴 글을 가운데 정렬 칸에 넣으면 기록지답지 않게 보인다.
+          // 담당자가 한글에서 직접 쓸 때처럼 양쪽 정렬로 넣는다
+          if (!alignment && isLongText(plan.text)) {
+            try {
+              const a = JSON.parse(doc.getCellParaPropertiesAtByPath(SEC, loc.para, path(0))).alignment as string;
+              if (a === 'center') alignment = 'justify';
+            } catch { /* 정렬을 못 읽으면 그대로 둔다 */ }
+          }
           if (alignment) lines.forEach((_, k) => doc.applyParaFormatInCellByPath(SEC, loc.para, path(k), JSON.stringify({ alignment })));
         }
         applied.push(plan.cell.id);
         warnings.push(...plan.warnings.map((message) => ({ id: plan.cell.id, message })));
       } catch (err) {
-        skipped.push({ id: plan.cell.id, message: `쓰지 못함: ${err instanceof Error ? err.message.slice(0, 120) : '알 수 없는 오류'}` });
+        skipped.push({ id: plan.cell.id, message: `이 항목에 쓰지 못함: ${err instanceof Error ? err.message.slice(0, 120) : '알 수 없는 오류'}` });
       }
     }
     const data = doc.exportHwp();

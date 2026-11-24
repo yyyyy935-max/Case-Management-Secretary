@@ -4,14 +4,14 @@ import type { FormCell, FormDocument, FormTable, Paragraph } from './types.ts';
 export type CellRole = 'label' | 'input' | 'checkbox_group' | 'guide' | 'judgment' | 'signature' | 'personal' | 'fixed';
 
 export const ROLE_NAMES: Record<CellRole, string> = {
-  label: '항목명',
-  input: '입력칸',
-  checkbox_group: '선택 묶음',
-  guide: '안내문 칸',
-  judgment: '판단 칸',
-  signature: '서명·동의',
+  label: '항목 이름',
+  input: '작성란',
+  checkbox_group: '체크 항목',
+  guide: '작성 안내 문구',
+  judgment: '담당자 판단',
+  signature: '서명·동의란',
   personal: '인적사항',
-  fixed: '고정 문구',
+  fixed: '인쇄된 글',
 };
 
 export interface CellClassification {
@@ -266,7 +266,7 @@ function classifyTable(table: FormTable, tables: FormTable[]): CellClassificatio
     const spacer = thin && cells.length > 0 && cells.every((c) => !c.text.trim() && !c.nestedTableIndexes.length && c.rowSpan === 1 && c.sideBorders && !c.sideBorders.left && !c.sideBorders.right);
     if (spacer) for (const c of cells) {
       kinds.set(c, 'spacer');
-      out.set(c, { id: c.id, tableIndex: table.index, role: 'fixed', reason: '세로 테두리가 없는 빈 행. 표 사이를 띄우는 간격 줄로 봄' });
+      out.set(c, { id: c.id, tableIndex: table.index, role: 'fixed', reason: '세로 테두리가 없는 빈 줄. 표 사이를 띄우는 줄로 봄' });
     }
   }
 
@@ -275,7 +275,7 @@ function classifyTable(table: FormTable, tables: FormTable[]): CellClassificatio
     const kind = kinds.get(cell)!;
     if (kind === 'container') {
       const inner = cell.nestedTableIndexes.map((i) => `표 ${i}`).join(', ');
-      out.set(cell, { id: cell.id, tableIndex: table.index, role: 'fixed', reason: `안쪽 표(${inner})를 담은 칸. 안쪽 표에서 따로 분류함` });
+      out.set(cell, { id: cell.id, tableIndex: table.index, role: 'fixed', reason: `안에 작은 표(${inner})가 있는 칸. 안쪽 표의 항목을 따로 봄` });
       continue;
     }
     if (!FILLABLE.includes(kind)) continue;
@@ -297,13 +297,13 @@ function classifyTable(table: FormTable, tables: FormTable[]): CellClassificatio
     }
     // 동의 체크
     if (kind === 'checkbox' && (CONSENT.test(text) || CONSENT.test(rowLabel ?? '') || CONSENT.test(colLabel ?? '') || /^(필수|선택)\s*[□☐▢]/.test(text))) {
-      out.set(cell, { ...base, role: 'signature', reason: '대상자 동의를 체크하는 칸' });
+      out.set(cell, { ...base, role: 'signature', reason: '대상자 동의 여부를 체크하는 곳' });
       continue;
     }
     // 점수 고르기
     if (kind === 'score') {
       const why = judgmentOf(colLabel, rowLabel) ?? (/그렇다|않다|보통/.test(colLabel ?? '') ? '만족도 점수(대상자가 직접 고름)' : '점수 고르기');
-      out.set(cell, { ...base, role: 'judgment', reason: `${why}: 숫자 중 하나를 고르는 칸` });
+      out.set(cell, { ...base, role: 'judgment', reason: `${why}: 점수 중 하나를 고르는 곳` });
       continue;
     }
     // 점수 숫자 머리글(0 1 2 3) 아래 빈칸: 점수를 표시하는 칸
@@ -314,13 +314,13 @@ function classifyTable(table: FormTable, tables: FormTable[]): CellClassificatio
     }
     // 설문 응답 칸: 열 항목명이 "그렇다", "보통이다", "만족" 같은 응답 선택지면 대상자가 직접 고르는 칸
     if (colLabel && LIKERT.test(norm(colLabel)) && (kind === 'empty' || kind === 'checkbox')) {
-      out.set(cell, { ...base, role: 'judgment', reason: `설문 응답(대상자가 직접 고름): "${colLabel}" 열` });
+      out.set(cell, { ...base, role: 'judgment', reason: `대상자가 직접 고르는 설문 응답 ("${colLabel}")` });
       continue;
     }
     // 판단 칸 (항목명 또는 칸 안 글로 판단)
     const jWhy = judgmentOf(rowLabel, colLabel) ?? (kind === 'checkbox' ? judgmentOf(text) : undefined);
     if (jWhy) {
-      out.set(cell, { ...base, role: 'judgment', reason: `${jWhy} (항목명: ${labelsTxt})` });
+      out.set(cell, { ...base, role: 'judgment', reason: `${jWhy} (항목: ${labelsTxt})` });
       continue;
     }
     // 순위가 인쇄된 행의 욕구영역 칸 = 우선순위 정하기
@@ -338,7 +338,7 @@ function classifyTable(table: FormTable, tables: FormTable[]): CellClassificatio
     }
     // 안내 문구
     if (kind === 'guide') {
-      out.set(cell, { ...base, role: 'guide', reason: PLACEHOLDER.test(text) && !isGuideStyled(cell.paragraphs) ? `자리 표시 값("${text.slice(0, 20)}"). 지우고 실제 값을 써야 하는 칸` : '회색 또는 기울임 글씨의 안내 문구. 지우고 써야 하는 칸' });
+      out.set(cell, { ...base, role: 'guide', reason: PLACEHOLDER.test(text) && !isGuideStyled(cell.paragraphs) ? `"${text.slice(0, 20)}"처럼 실제 내용으로 바꿔 써야 하는 곳` : '회색이나 기울임 글씨의 작성 안내. 안내 문구를 지우고 씀' });
       continue;
     }
     // 칸 안에 "특이사항：", "방문일시："처럼 자기 항목명이 인쇄되어 있으면 그것을 먼저 본다
@@ -346,9 +346,9 @@ function classifyTable(table: FormTable, tables: FormTable[]): CellClassificatio
     const inlineLabel = inline && inline.length <= 12 && inline !== norm(text) && /^[가-힣A-Za-z]/.test(inline) ? inline : '';
     if (inlineLabel && !/성명|이름/.test(inlineLabel)) {
       const jw = judgmentOf(inlineLabel);
-      if (jw) { out.set(cell, { ...base, role: 'judgment', reason: `${jw} (칸 안 항목명: ${inlineLabel})` }); continue; }
-      if (isPersonalLabel(inlineLabel)) { out.set(cell, { ...base, role: 'personal', reason: `인적·식별 정보 (칸 안 항목명: ${inlineLabel}). 사례 카드에 담당자가 입력한 값만 씀` }); continue; }
-      out.set(cell, { ...base, rowLabel: base.rowLabel ?? inlineLabel, role: 'input', inputKind: 'template', reason: `칸 안에 항목명("${inlineLabel}")과 빈자리가 인쇄된 입력칸` });
+      if (jw) { out.set(cell, { ...base, role: 'judgment', reason: `${jw} (항목: ${inlineLabel})` }); continue; }
+      if (isPersonalLabel(inlineLabel)) { out.set(cell, { ...base, role: 'personal', reason: `개인정보 항목 (${inlineLabel}). 담당자가 사례 카드에 직접 넣은 내용만 씀` }); continue; }
+      out.set(cell, { ...base, rowLabel: base.rowLabel ?? inlineLabel, role: 'input', inputKind: 'template', reason: `항목 이름("${inlineLabel}")과 빈자리가 함께 인쇄된 작성란` });
       continue;
     }
     // 인적사항
@@ -360,11 +360,11 @@ function classifyTable(table: FormTable, tables: FormTable[]): CellClassificatio
       return isPersonalLabel(n);
     }) ?? (/성명\s*:/.test(text) ? cell : undefined);
     if (personal) {
-      out.set(cell, { ...base, role: 'personal', reason: `인적·식별 정보 (항목명: ${personal === cell ? '칸 안의 성명·연락처 항목' : labelNorm(personal.text)}). 사례 카드에 담당자가 입력한 값만 씀` });
+      out.set(cell, { ...base, role: 'personal', reason: `개인정보 항목 (${personal === cell ? '성명, 연락처' : labelNorm(personal.text)}). 담당자가 사례 카드에 직접 넣은 내용만 씀` });
       continue;
     }
     if (kind === 'checkbox') {
-      out.set(cell, { ...base, role: 'checkbox_group', reason: `선택지 묶음 (항목명: ${labelsTxt})` });
+      out.set(cell, { ...base, role: 'checkbox_group', reason: `체크 항목 (항목: ${labelsTxt})` });
       continue;
     }
     const inputKind = kind === 'template' ? 'template' : kind === 'prompt' ? 'prompt' : 'blank';
@@ -373,10 +373,10 @@ function classifyTable(table: FormTable, tables: FormTable[]): CellClassificatio
       role: 'input',
       inputKind,
       reason:
-        inputKind === 'template' ? `괄호·밑줄 등 빈자리가 인쇄된 입력칸 (항목명: ${labelsTxt})` :
-        inputKind === 'prompt' ? `작성 항목이 인쇄된 입력칸. 항목은 두고 이어 쓰는 칸으로 봄 (항목명: ${labelsTxt})` :
-        `빈 입력칸 (항목명: ${labelsTxt})`,
-      warning: !rowL && !colL ? '항목명을 찾지 못함' : undefined,
+        inputKind === 'template' ? `괄호나 밑줄로 빈자리가 인쇄된 작성란 (항목: ${labelsTxt})` :
+        inputKind === 'prompt' ? `작성할 항목이 인쇄된 작성란. 인쇄된 항목은 두고 이어 씀 (항목: ${labelsTxt})` :
+        `비어 있는 작성란 (항목: ${labelsTxt})`,
+      warning: !rowL && !colL ? '항목 이름을 찾지 못함' : undefined,
     });
   }
 
@@ -400,8 +400,8 @@ function classifyTable(table: FormTable, tables: FormTable[]): CellClassificatio
   }
   for (const cell of table.cells) {
     if (out.has(cell)) continue;
-    if (usedAsLabel.has(cell)) out.set(cell, { id: cell.id, tableIndex: table.index, role: 'label', reason: '입력칸의 항목명 또는 항목명 묶음의 제목' });
-    else out.set(cell, { id: cell.id, tableIndex: table.index, role: 'fixed', reason: '채울 칸과 연결되지 않은 글(고정 문구)' });
+    if (usedAsLabel.has(cell)) out.set(cell, { id: cell.id, tableIndex: table.index, role: 'label', reason: '작성란의 항목 이름' });
+    else out.set(cell, { id: cell.id, tableIndex: table.index, role: 'fixed', reason: '작성란과 관계없는 인쇄된 글' });
   }
   void tables;
   return table.cells.map((c) => out.get(c)!);
@@ -415,17 +415,17 @@ function inlineLabels(text: string): string[] {
 function classifyBody(doc: FormDocument): CellClassification[] {
   return doc.bodyParagraphs.map((b) => {
     const text = b.paragraph.text.trim();
-    if (/^\s*(참고|부록)\s*\d/.test(b.groupTitle ?? '')) return { id: b.id, role: 'fixed', reason: '참고 자료 안의 문단' };
-    if (SIGN_SLOT.test(text)) return { id: b.id, role: 'signature', reason: `본문의 서명·날인 자리` };
-    if (hasChoiceBoxes(text) && CONSENT.test(text)) return { id: b.id, role: 'signature', reason: '본문의 동의 체크' };
+    if (/^\s*(참고|부록)\s*\d/.test(b.groupTitle ?? '')) return { id: b.id, role: 'fixed', reason: '참고 자료의 글' };
+    if (SIGN_SLOT.test(text)) return { id: b.id, role: 'signature', reason: `표 밖의 서명·날인 자리` };
+    if (hasChoiceBoxes(text) && CONSENT.test(text)) return { id: b.id, role: 'signature', reason: '표 밖의 동의 체크' };
     const labels = inlineLabels(text);
     const jw = judgmentOf(...labels);
-    if (jw) return { id: b.id, role: 'judgment', reason: `본문의 ${jw} 자리` };
+    if (jw) return { id: b.id, role: 'judgment', reason: `표 밖의 ${jw} 자리` };
     const pl = labels.find((l) => isPersonalLabel(l));
-    if (pl) return { id: b.id, role: 'personal', reason: `본문의 인적·식별 정보 자리 (항목명: ${pl})` };
-    if (hasChoiceBoxes(text)) return { id: b.id, role: 'checkbox_group', reason: '본문의 선택지' };
-    if (DATE_SLOT.test(text) || BLANK_SLOT.test(text)) return { id: b.id, role: 'input', inputKind: 'template', reason: '본문의 날짜·빈칸' };
-    return { id: b.id, role: 'fixed', reason: '머리 기호(□)로 시작하는 본문 문단' };
+    if (pl) return { id: b.id, role: 'personal', reason: `표 밖의 개인정보 자리 (${pl})` };
+    if (hasChoiceBoxes(text)) return { id: b.id, role: 'checkbox_group', reason: '표 밖의 체크 항목' };
+    if (DATE_SLOT.test(text) || BLANK_SLOT.test(text)) return { id: b.id, role: 'input', inputKind: 'template', reason: '표 밖의 날짜나 빈칸' };
+    return { id: b.id, role: 'fixed', reason: '□ 기호로 시작하는 표 밖의 글' };
   });
 }
 
@@ -433,8 +433,8 @@ function classifyBody(doc: FormDocument): CellClassification[] {
 function markWeak(c: CellClassification): CellClassification {
   if (c.warning || c.role === 'label' || c.role === 'fixed') return c;
   const labels = [c.rowLabel, c.colLabel].filter(Boolean) as string[];
-  if (!labels.length && (c.role === 'input' || c.role === 'checkbox_group')) return { ...c, warning: '항목명을 찾지 못함' };
-  if (labels.length && labels.every((l) => norm(l).length > 30)) return { ...c, warning: '항목명이 길어 설명 글일 수 있음' };
+  if (!labels.length && (c.role === 'input' || c.role === 'checkbox_group')) return { ...c, warning: '항목 이름을 찾지 못함' };
+  if (labels.length && labels.every((l) => norm(l).length > 30)) return { ...c, warning: '항목 이름이 길어 설명 글일 수 있음' };
   return c;
 }
 
@@ -443,7 +443,7 @@ export function classifyForm(doc: FormDocument, overrides: Record<string, CellRo
   const apply = (c: CellClassification): CellClassification => {
     const r = overrides[c.id];
     if (!r || !(r in ROLE_NAMES)) return { ...markWeak(c), source: 'rule', ruleRole: c.role };
-    return { ...c, role: r, reason: `담당자가 정함 (규칙 분류: ${ROLE_NAMES[c.role]})`, warning: undefined, source: 'template', ruleRole: c.role };
+    return { ...c, role: r, reason: `담당자가 고침 (처음 판단: ${ROLE_NAMES[c.role]})`, warning: undefined, source: 'template', ruleRole: c.role };
   };
   return {
     cells: doc.tables.flatMap((t) => classifyTable(t, doc.tables)).map(apply),

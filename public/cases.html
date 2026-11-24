@@ -44,10 +44,10 @@
   </style>
 </head>
 <body>
-  <nav class="nav"><a href="/">사례비서</a><a href="/cases.html" aria-current="page">사례 카드</a><a href="/forms.html">양식 칸 지도</a></nav>
+  <nav class="nav"><a href="/">사례비서</a><a href="/cases.html" aria-current="page">사례 카드</a><a href="/forms.html">양식 채우기</a></nav>
   <main class="wrap wide">
     <h1>사례 카드</h1>
-    <div class="notice"><b>가상 사례만 넣으세요.</b> 이름·연락처를 가리고 AI로 보내는 기능(5단계)을 만들기 전이라, 지금은 실제 사례를 넣으면 안 됩니다. 사례는 이 PC의 data/cases 폴더에만 저장됩니다.</div>
+    <div class="notice"><b>가상 사례만 넣으세요.</b> AI에 보내기 전에 이름과 연락처를 가리는 기능을 아직 만들지 않아서, 지금은 실제 사례를 넣으면 안 됩니다. 사례는 이 PC의 data/cases 폴더에만 저장됩니다.</div>
     <div id="aiStatus" class="note"></div>
     <div class="grid">
       <aside class="panel caselist">
@@ -72,13 +72,13 @@
 
     async function init() {
       schema = await api('/schema');
-      $('aiStatus').textContent = schema.aiReady ? 'AI(Gemini) 연결 준비됨: 기록을 저장하면 사실을 뽑을 수 있습니다.' : 'AI 키가 아직 없어 "사실 뽑기"는 쓸 수 없습니다. 기록 저장과 직접 입력은 됩니다. (config.local.json의 ai.apiKey)';
+      $('aiStatus').textContent = schema.aiReady ? 'AI 연결됨: 기록을 저장한 뒤 "AI로 정리"를 누르면 사례 카드에 넣을 내용을 골라 줍니다.' : 'AI 키를 아직 넣지 않아 "AI로 정리"는 쓸 수 없습니다. 기록 저장과 사례 카드 직접 입력은 됩니다. (키는 config.local.json 파일의 ai.apiKey에 넣습니다)';
       await loadList();
     }
 
     async function loadList() {
       const list = await api('');
-      $('cases').innerHTML = list.length ? list.map((c) => `<button class="case" data-id="${c.id}" aria-current="${current?.id === c.id}">${esc(c.title)}<div class="meta">기록 ${c.records}건${c.pending ? ` · 확인 대기 ${c.pending}` : ''}</div></button>`).join('') : '<p class="empty">사례가 없습니다.</p>';
+      $('cases').innerHTML = list.length ? list.map((c) => `<button class="case" data-id="${c.id}" aria-current="${current?.id === c.id}">${esc(c.title)}<div class="meta">기록 ${c.records}건${c.pending ? ` · 확인할 내용 ${c.pending}` : ''}</div></button>`).join('') : '<p class="empty">사례가 없습니다.</p>';
     }
 
     $('create').addEventListener('click', async () => {
@@ -101,7 +101,7 @@
     function targetLabel(t) {
       if (t.kind === 'general') return `일반사항 · ${schema.general[t.key].label}`;
       if (t.kind === 'need') return `욕구 · ${schema.needs[t.area]}`;
-      if (t.kind === 'person') return `인물 · ${t.relation} · ${schema.personAttrs[t.attr]}`;
+      if (t.kind === 'person') return `가족·관계인 · ${t.relation} · ${schema.personAttrs[t.attr]}`;
       return '서비스';
     }
 
@@ -111,12 +111,12 @@
       const sugs = c.suggestions.map((s) => `
         <div class="sug" data-sid="${s.id}">
           <div class="target">${esc(targetLabel(s.target))} <span class="badge">${esc(schema.speakers[s.speaker])}</span> <span class="src">${esc(recDate(s.recordId))} 기록</span></div>
-          <input type="text" value="${esc(s.value)}" aria-label="후보 값">
-          <div class="ev">근거: "${esc(s.evidence)}"</div>
-          ${s.conflictWith ? `<div class="conflict">지금 카드 값: "${esc(s.conflictWith)}" — 승인하면 이 후보로 바뀝니다.</div>` : ''}
-          <div class="row"><button class="btn" data-act="approve">승인</button><button class="btn danger" data-act="reject">거절</button></div>
+          <input type="text" value="${esc(s.value)}" aria-label="정리한 내용">
+          <div class="ev">기록 원문: "${esc(s.evidence)}"</div>
+          ${s.conflictWith ? `<div class="conflict">사례 카드에 지금 적힌 내용: "${esc(s.conflictWith)}". 넣으면 이 내용으로 바뀝니다.</div>` : ''}
+          <div class="row"><button class="btn" data-act="approve">카드에 넣기</button><button class="btn danger" data-act="reject">빼기</button></div>
         </div>`).join('');
-      const rejected = c.rejected.length ? `<details><summary>걸러진 후보 ${c.rejected.length}개 (근거가 기록에 없거나 의견 등)</summary><ul>${c.rejected.map((r) => `<li class="src">${esc(r.reason)} — ${esc(JSON.stringify(r.raw).slice(0, 140))}</li>`).join('')}</ul></details>` : '';
+      const rejected = c.rejected.length ? `<details><summary>프로그램이 뺀 내용 ${c.rejected.length}개 (기록 원문에서 근거를 찾지 못했거나 담당자 의견인 것)</summary><ul>${c.rejected.map((r) => `<li class="src">${esc(r.raw && typeof r.raw === 'object' && 'value' in r.raw ? String(r.raw.value) : '')} (뺀 이유: ${esc(r.reason)})</li>`).join('')}</ul></details>` : '';
       const general = Object.entries(schema.general).map(([k, d]) => {
         const f = c.general[k];
         return `<tr><th>${esc(d.label)}</th><td>${f ? `${esc(f.value)} <span class="badge ok">확인</span> <span class="src">${esc(srcOf(f))}</span>` : '<span class="empty">확인 필요</span>'} <button class="linkbtn" data-edit-general="${k}">${f ? '고치기' : '직접 넣기'}</button></td></tr>`;
@@ -125,24 +125,24 @@
       const needs = Object.entries(schema.needs).map(([k, label]) => `<tr><th>${esc(label)}</th><td>${(c.needs[k] ?? []).map((f, i) => `<div class="fact">${esc(f.value)} <span class="src">${esc(srcOf(f))}</span><button class="linkbtn" data-del-need="${k}:${i}" title="지우기">지우기</button></div>`).join('') || '<span class="empty">확인 필요</span>'}</td></tr>`).join('');
       const services = c.services.map((s) => `<div class="fact">${esc(s.text.value)} <span class="src">${esc(srcOf(s.text))}</span></div>`).join('') || '<span class="empty">아직 없음</span>';
       const records = [...c.records].reverse().map((r) => `
-        <div class="rec"><div class="row"><b>${esc(r.date)}</b><span class="badge">${esc(r.type)}</span>${r.extractedAt ? '<span class="src">사실 뽑기 함</span>' : ''}<button class="btn sub" data-extract="${r.id}" ${schema.aiReady ? '' : 'disabled'}>사실 뽑기</button></div><pre>${esc(r.rawText)}</pre></div>`).join('') || '<p class="empty">기록이 없습니다.</p>';
+        <div class="rec"><div class="row"><b>${esc(r.date)}</b><span class="badge">${esc(r.type)}</span>${r.extractedAt ? '<span class="src">AI 정리 완료</span>' : ''}<button class="btn sub" data-extract="${r.id}" ${schema.aiReady ? '' : 'disabled'}>AI로 정리</button></div><pre>${esc(r.rawText)}</pre></div>`).join('') || '<p class="empty">기록이 없습니다.</p>';
 
       $('main').innerHTML = `
         <div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.title)}</h2><button class="btn danger" id="del">사례 지우기</button></div>
         <section class="block panel">
           <h2>새 기록 넣기</h2>
           <div class="row"><input type="date" id="rDate" value="${today}"><select id="rType">${schema.recordTypes.map((t) => `<option>${t}</option>`).join('')}</select><input type="text" id="rAuthor" placeholder="작성자(선택)"></div>
-          <textarea id="rText" placeholder="상담·방문·전화 메모를 붙여 넣으세요. (가상 사례만)"></textarea>
-          <div class="row"><button class="btn" id="saveRec">저장</button><button class="btn sub" id="saveExtract" ${schema.aiReady ? '' : 'disabled'}>저장하고 사실 뽑기</button><span id="recMsg" class="msg"></span></div>
+          <textarea id="rText" placeholder="상담, 가정방문, 전화 상담 메모를 붙여 넣으세요. (가상 사례만)"></textarea>
+          <div class="row"><button class="btn" id="saveRec">저장</button><button class="btn sub" id="saveExtract" ${schema.aiReady ? '' : 'disabled'}>저장하고 AI로 정리</button><span id="recMsg" class="msg"></span></div>
         </section>
         <section class="block">
-          <h2>확인할 후보 ${c.suggestions.length ? `(${c.suggestions.length})` : ''}</h2>
-          ${sugs || '<p class="empty">확인할 후보가 없습니다.</p>'}
+          <h2>AI가 정리한 내용 확인 ${c.suggestions.length ? `(${c.suggestions.length})` : ''}</h2>
+          ${sugs || '<p class="empty">확인할 내용이 없습니다.</p>'}
           ${rejected}
         </section>
         <section class="block"><h2>일반사항</h2><table class="card">${general}</table></section>
-        <section class="block"><h2>인물 (대상자·가족·관계인)</h2><table class="card">${people}</table></section>
-        <section class="block"><h2>욕구 영역별 사실</h2><p class="src">욕구 수준 점수와 우선순위는 담당자가 양식에 직접 정합니다.</p><table class="card">${needs}</table></section>
+        <section class="block"><h2>대상자와 가족·관계인</h2><table class="card">${people}</table></section>
+        <section class="block"><h2>욕구 영역별 사실</h2><p class="src">욕구 수준 점수와 우선순위는 담당자가 양식에 직접 씁니다.</p><table class="card">${needs}</table></section>
         <section class="block"><h2>이용·연계 서비스</h2><div class="panel">${services}</div></section>
         <section class="block"><h2>기록 (${c.records.length})</h2>${records}</section>`;
     }
@@ -170,7 +170,7 @@
         render();
         const m = $('recMsg');
         m.className = 'msg';
-        m.textContent = `후보 ${r.accepted}개를 찾았습니다${r.rejected.length ? `, ${r.rejected.length}개는 근거가 맞지 않아 뺐습니다` : ''}.`;
+        m.textContent = `카드에 넣을 내용 ${r.accepted}개를 골랐습니다. 하나씩 확인해 주세요${r.rejected.length ? `. ${r.rejected.length}개는 기록 원문에서 근거를 찾지 못해 뺐습니다` : ''}.`;
       } catch (err) {
         render();
         const m = $('recMsg');
