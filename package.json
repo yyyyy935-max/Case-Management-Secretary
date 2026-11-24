@@ -1,6 +1,6 @@
 {
   "name": "case-management-secretary",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "사례비서 - 사례관리 담당자용 로컬 업무 도우미",
   "type": "module",
@@ -14,6 +14,7 @@
     "analyze": "tsx scripts/analyze-form.ts"
   },
   "dependencies": {
+    "@rhwp/core": "0.9.1",
     "@xmldom/xmldom": "0.9.12",
     "express": "5.3.0",
     "jszip": "3.10.1",
@@ -21,7 +22,6 @@
     "tsx": "4.23.15"
   },
   "devDependencies": {
-    "@rhwp/core": "0.9.1",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0"

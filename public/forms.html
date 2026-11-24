@@ -42,6 +42,21 @@
     .review { background: #fff1f0; color: var(--danger); border-color: #f5b5ae; }
     .changed { background: #e8f0ff; color: var(--accent); border-color: #a9c1f5; }
     .ftable td.warn-cell::after { content: '?'; position: absolute; top: 1px; right: 3px; font-size: 10px; font-weight: 700; color: var(--danger); }
+    .editor { margin-top: 8px; padding: 8px; background: #fff; border: 1px solid var(--line-strong); border-radius: 6px; cursor: default; }
+    .editor textarea { width: 100%; min-height: 64px; font: inherit; font-size: 13px; padding: 6px; box-sizing: border-box; }
+    .editor .opts label { display: inline-flex; gap: 4px; align-items: center; margin: 2px 10px 2px 0; font-size: 13px; }
+    .editor .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .editor .caution { font-size: 12px; color: var(--danger); margin-bottom: 4px; }
+    .hasval { background: #e6f6ea; color: #1a7f37; border-color: #9fd3a7; }
+    .ftable td.val-cell { box-shadow: inset 0 0 0 2px #1a7f37; }
+    .fillres { margin: 12px 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+    .fillres table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 6px 0; }
+    .fillres th, .fillres td { border: 1px solid var(--line-strong); padding: 4px 8px; text-align: left; vertical-align: top; }
+    .fillres .pass { color: var(--ok); font-weight: 700; } .fillres .fail { color: var(--danger); font-weight: 700; }
+    .pages { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+    .pages figure { margin: 0; background: #fff; border: 1px solid var(--line); }
+    .pages figcaption { font-size: 12px; color: var(--muted); padding: 4px 8px; }
+    .pages img { width: 100%; display: block; }
     .badge { display: inline-block; border-radius: 4px; padding: 1px 6px; font-size: 12px; font-weight: 700; border: 1px solid transparent; }
     .legend { display: flex; flex-wrap: wrap; gap: 6px; }
     /* 역할별 색 */
@@ -59,7 +74,7 @@
   <nav class="nav"><a href="/">사례비서</a><a href="/forms.html" aria-current="page">양식 칸 지도</a></nav>
   <main class="wrap wide">
     <h1>양식 칸 지도</h1>
-    <p class="note">양식 파일(HWP, HWPX, DOCX)을 올리면 칸마다 역할을 나눠 보여 줍니다. 이 단계는 <b>읽기만</b> 하며 파일을 고치지 않습니다. 파일은 이 PC 안에서만 처리되고 저장되지 않습니다.</p>
+    <p class="note">양식 파일(HWP, HWPX, DOCX)을 올리면 칸마다 역할을 나눠 보여 줍니다. 오른쪽 목록에서 칸을 누르면 값을 넣을 수 있고, <b>채운 파일 만들기</b>를 누르면 원본과 같은 형식의 파일을 만듭니다. 원본 파일은 바꾸지 않으며, 파일은 이 PC 안에서만 처리되고 저장되지 않습니다.</p>
 
     <div class="upload">
       <input type="file" id="file" accept=".hwp,.hwpx,.docx">
@@ -72,7 +87,9 @@
         <span id="summary" class="note"></span>
         <span id="tplStatus" class="note"></span>
         <button id="save" class="btn" disabled>고친 역할 저장</button>
+        <button id="fill" class="btn" disabled>채운 파일 만들기</button>
       </div>
+      <section id="fillResult" class="fillres" hidden></section>
       <div class="legend" id="legend"></div>
       <div class="layout" style="margin-top:12px">
         <section class="preview" id="preview" aria-label="양식 미리보기"></section>
@@ -87,7 +104,21 @@
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    let data = null, byId = new Map(), filter = null, selected = null, overrides = {}, dirty = false, fileName = '';
+    let data = null, byId = new Map(), filter = null, selected = null, overrides = {}, dirty = false, fileName = '', currentFile = null, values = {};
+    const cellById = new Map();
+    const BOX = /[□☐▢◻\u{F02EB}]/u;
+    /** 칸 글에서 "□ 가정방문" 같은 선택지 이름 목록 (서버의 boxOptions와 같은 규칙) */
+    function boxOptions(text) {
+      const cps = [...text]; const out = [];
+      for (let i = 0; i < cps.length; i++) {
+        if (!BOX.test(cps[i])) continue;
+        let j = i + 1; while (j < cps.length && !BOX.test(cps[j]) && cps[j] !== '\n') j++;
+        let label = cps.slice(i + 1, j).join('').trim();
+        if (!label) { let k = i - 1; while (k >= 0 && !BOX.test(cps[k]) && cps[k] !== '\n') k--; label = cps.slice(k + 1, i).join('').trim(); }
+        out.push(label);
+      }
+      return out;
+    }
 
     $('file').addEventListener('change', async (e) => {
       const f = e.target.files[0];
@@ -101,6 +132,11 @@
         if (!res.ok) throw new Error(json.error || '분석하지 못했습니다.');
         data = json;
         fileName = f.name;
+        currentFile = f;
+        values = {};
+        cellById.clear();
+        for (const t of data.document.tables) for (const c of t.cells) cellById.set(c.id, c);
+        $('fillResult').hidden = true;
         overrides = { ...(data.template?.overrides || {}) };
         dirty = false;
         byId = new Map([...data.classification.cells, ...data.classification.body].map((c) => [c.id, c]));
@@ -111,6 +147,7 @@
         $('legend').innerHTML = Object.entries(data.roleNames).map(([k, v]) => `<span class="badge b-${k}">${esc(v)}</span>`).join('');
         filter = null; selected = null;
         updateTplStatus();
+        updateFillButton();
         render();
         $('result').hidden = false;
       } catch (err) {
@@ -158,11 +195,12 @@
       $('list').innerHTML = shown.map(({ cell, cls }) => {
         const labels = [cls.rowLabel, cls.colLabel].filter(Boolean).join(' / ');
         return `<div class="item" data-id="${cell.id}">
-          <div class="top"><span class="badge b-${cls.role}">${esc(data.roleNames[cls.role])}</span>${cls.warning ? '<span class="badge review">확인 필요</span>' : ''}${cls.source === 'template' ? '<span class="badge changed">담당자가 정함</span>' : ''}<span class="id">${cell.id}</span>${labels ? `<span>${esc(labels)}</span>` : ''}
+          <div class="top"><span class="badge b-${cls.role}">${esc(data.roleNames[cls.role])}</span>${values[cell.id] ? '<span class="badge hasval">값 넣음</span>' : ''}${cls.warning ? '<span class="badge review">확인 필요</span>' : ''}${cls.source === 'template' ? '<span class="badge changed">담당자가 정함</span>' : ''}<span class="id">${cell.id}</span>${labels ? `<span>${esc(labels)}</span>` : ''}
             <select data-id="${cell.id}" aria-label="역할 바꾸기">${Object.entries(data.roleNames).map(([k, v]) => `<option value="${k}"${k === cls.role ? ' selected' : ''}>${esc(v)}${k === cls.ruleRole ? ' (규칙)' : ''}</option>`).join('')}</select></div>
           ${cell.text.trim() ? `<div class="txt">${esc(cell.text.trim().replace(/\s+/g, ' ').slice(0, 80))}</div>` : ''}
           <div class="why">${esc(cls.reason)}</div>
           ${cls.warning ? `<div class="warn">⚠ ${esc(cls.warning)}</div>` : ''}
+          <div class="editor-slot"></div>
         </div>`;
       }).join('') || '<div class="item">해당하는 칸이 없습니다.</div>';
 
@@ -170,6 +208,7 @@
         const c = byId.get(td.dataset.id);
         td.classList.toggle('dim', !match(c));
         td.classList.toggle('warn-cell', !!c.warning);
+        td.classList.toggle('val-cell', !!values[td.dataset.id]);
       });
       if (selected) select(selected, false);
     }
@@ -201,6 +240,9 @@
       const item = document.querySelector(`#list [data-id="${id}"]`);
       cell?.classList.add('sel');
       item?.classList.add('sel');
+      document.querySelectorAll('.editor-slot').forEach((el) => { el.innerHTML = ''; });
+      const slot = item?.querySelector('.editor-slot');
+      if (slot) slot.innerHTML = editorHtml(id);
       if (scroll) { cell?.scrollIntoView({ block: 'center', behavior: 'smooth' }); item?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     }
 
@@ -233,13 +275,93 @@
         updateTplStatus(err.message);
       }
     });
+    function editorHtml(id) {
+      const c = cellById.get(id);
+      const cls = byId.get(id);
+      if (!c) return '<div class="editor"><div class="hint">표 밖 문단 채우기는 아직 지원하지 않습니다.</div></div>';
+      if (cls.role === 'label' || cls.role === 'fixed') return '<div class="editor"><div class="hint">항목명·고정 문구 칸은 바꾸지 않습니다. 역할이 틀렸으면 위 선택 상자에서 바꾸세요.</div></div>';
+      if (c.nestedTableIndexes.length) return '<div class="editor"><div class="hint">안쪽 표가 든 칸입니다. 안쪽 표의 칸을 눌러 채우세요.</div></div>';
+      const caution = ['judgment', 'signature', 'personal'].includes(cls.role) ? `<div class="caution">${esc(data.roleNames[cls.role])} 칸입니다. 담당자가 직접 정한 값만 넣으세요. (나중에 AI는 이 칸을 채우지 않습니다)</div>` : '';
+      const opts = boxOptions(c.text);
+      if (opts.length) {
+        const checked = new Set(values[id]?.check || []);
+        return `<div class="editor" data-ed="${id}">${caution}<div class="opts">${opts.map((o) => `<label><input type="checkbox" data-opt="${esc(o)}"${checked.has(o) ? ' checked' : ''}>${esc(o || '(이름 없는 칸)')}</label>`).join('')}</div><div class="hint">체크한 선택지의 □만 체크 기호로 바뀝니다.</div></div>`;
+      }
+      const isTemplate = cls.inputKind === 'template' || cls.inputKind === 'prompt';
+      const v = values[id]?.text ?? (isTemplate ? c.text : '');
+      return `<div class="editor" data-ed="${id}">${caution}<textarea data-text>${esc(v)}</textarea><div class="hint">${cls.role === 'guide' ? '안내 문구는 지워지고 이 글이 일반 서식으로 들어갑니다. ' : ''}${isTemplate ? '인쇄된 글을 고쳐 빈자리를 채우세요. ' : ''}줄을 바꾸면 문단이 나뉩니다. 비워 두면 이 칸은 바꾸지 않습니다.</div></div>`;
+    }
+
+    function setValue(id, v) {
+      if (v) values[id] = v; else delete values[id];
+      updateFillButton();
+      const item = document.querySelector(`#list .item[data-id="${id}"] .top`);
+      if (item) {
+        const has = item.querySelector('.hasval');
+        if (v && !has) item.children[0].insertAdjacentHTML('afterend', '<span class="badge hasval">값 넣음</span>');
+        if (!v && has) has.remove();
+      }
+      document.querySelector(`#preview td[data-id="${id}"]`)?.classList.toggle('val-cell', !!v);
+    }
+
+    $('list').addEventListener('input', (e) => {
+      const ed = e.target.closest('[data-ed]');
+      if (!ed) return;
+      const id = ed.dataset.ed;
+      if (e.target.matches('textarea[data-text]')) {
+        const c = cellById.get(id);
+        const t = e.target.value;
+        setValue(id, t.trim() && t !== c.text ? { text: t } : null);
+      } else if (e.target.matches('input[data-opt]')) {
+        const check = [...ed.querySelectorAll('input[data-opt]:checked')].map((x) => x.dataset.opt);
+        setValue(id, check.length ? { check } : null);
+      }
+    });
+
+    function updateFillButton() {
+      const n = Object.keys(values).length;
+      $('fill').disabled = n === 0;
+      $('fill').textContent = n ? `채운 파일 만들기 (${n}칸)` : '채운 파일 만들기';
+    }
+
+    const toBase64 = (file) => new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = fail; r.readAsDataURL(file); });
+    const svgUrl = (svg) => 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+
+    $('fill').addEventListener('click', async () => {
+      const box = $('fillResult');
+      box.hidden = false;
+      box.innerHTML = '파일을 만드는 중…';
+      $('fill').disabled = true;
+      try {
+        const res = await fetch('/api/forms/fill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileBase64: await toBase64(currentFile), fileName, values }) });
+        const r = await res.json();
+        if (!res.ok) throw new Error(r.error || '파일을 만들지 못했습니다.');
+        const blob = new Blob([Uint8Array.from(atob(r.fileBase64), (ch) => ch.charCodeAt(0))]);
+        const url = URL.createObjectURL(blob);
+        const okAll = r.checks.every((c) => c.ok);
+        const label = (id) => { const c = byId.get(id); return [c?.rowLabel, c?.colLabel].filter(Boolean).join(' / ') || id; };
+        box.innerHTML = `
+          <p><b>${okAll ? '자동 검사를 모두 통과했습니다.' : '자동 검사에서 문제가 있습니다.'}</b> 채운 칸 ${r.applied.length}개${r.skipped.length ? `, 쓰지 않은 칸 ${r.skipped.length}개` : ''}.
+          <a class="btn" style="text-decoration:none;margin-left:8px" href="${url}" download="${esc(r.fileName)}">${esc(r.fileName)} 내려받기</a></p>
+          <p class="note">한글(또는 Word)에서 직접 열어 모양을 꼭 확인하세요. 아래 쪽 그림은 사례비서가 어림해 그린 것이라 한글과 조금 다를 수 있습니다.</p>
+          <table><tr><th>검사</th><th>결과</th><th>내용</th></tr>${r.checks.map((c) => `<tr><td>${esc(c.name)}</td><td class="${c.ok ? 'pass' : 'fail'}">${c.ok ? '통과' : '문제'}</td><td>${esc(c.detail)}</td></tr>`).join('')}</table>
+          ${r.warnings.length ? `<p><b>확인할 점</b></p><ul>${r.warnings.map((w) => `<li>${esc(label(w.id))} (${w.id}): ${esc(w.message)}</li>`).join('')}</ul>` : ''}
+          ${r.skipped.length ? `<p><b>쓰지 않은 칸</b></p><ul>${r.skipped.map((w) => `<li>${esc(label(w.id))} (${w.id}): ${esc(w.message)}</li>`).join('')}</ul>` : ''}
+          ${r.previews.length ? `<p><b>쪽 비교</b> (채운 칸이 있는 쪽)</p>${r.previews.map((p) => `<div class="pages"><figure><figcaption>${p.page}쪽 원본</figcaption><img alt="${p.page}쪽 원본" src="${svgUrl(p.before)}"></figure><figure><figcaption>${p.page}쪽 결과</figcaption><img alt="${p.page}쪽 결과" src="${svgUrl(p.after)}"></figure></div>`).join('')}` : ''}`;
+      } catch (err) {
+        box.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+      } finally {
+        updateFillButton();
+      }
+    });
+
     function updateTplStatus(msg) {
       const n = Object.keys(overrides).length;
       $('save').disabled = !dirty;
       $('tplStatus').textContent = msg || (dirty ? `고친 칸 ${n}개 (아직 저장 안 함)` : data.template ? `저장된 양식 템플릿 사용 중 (담당자가 정한 칸 ${n}개)` : '');
     }
     $('chips').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (!b) return; filter = b.dataset.role || null; render(); });
-    $('list').addEventListener('click', (e) => { const it = e.target.closest('.item[data-id]'); if (it) select(it.dataset.id); });
+    $('list').addEventListener('click', (e) => { if (e.target.closest('.editor, select')) return; const it = e.target.closest('.item[data-id]'); if (it) select(it.dataset.id); });
     $('preview').addEventListener('click', (e) => { const el = e.target.closest('[data-id]'); if (el) { e.stopPropagation(); if (filter) { filter = null; render(); } select(el.dataset.id); } });
   </script>
 </body>

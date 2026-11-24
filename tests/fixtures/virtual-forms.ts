@@ -4,6 +4,7 @@
  */
 import JSZip from 'jszip';
 import { markdownToHwpx, hwpxToHwp } from 'kordoc';
+import { loadRhwp } from '../../src/forms/fill/rhwp.ts';
 
 // ── HWPX (서식 포함, 직접 작성) ─────────────────────────────
 
@@ -147,4 +148,51 @@ export async function virtualDocx(): Promise<Uint8Array> {
   zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
   zip.file('word/document.xml', doc);
   return zip.generateAsync({ type: 'uint8array' });
+}
+
+/**
+ * 안내 문구 서식이 든 가상 HWP. kordoc으로 만든 HWP를 rhwp로 고쳐
+ * (1) 회색 기울임 안내 문구 3줄 칸, (2) 굵게 서식만 남은 빈칸을 만든다(요구사항 4.2 문제 재현용).
+ * 표 t0: r0 성명 | 빈칸, r1 방문 내용 | 안내 문구 3줄, r2 방식 | □ 방문 □ 전화, r3 메모 | 굵게 빈칸, r4 선정 여부 | □ 선정 □ 미선정
+ */
+export async function virtualGuideHwp(): Promise<Uint8Array> {
+  const md = `# 가상 방문 기록
+
+<table><tr><td>성명</td><td></td></tr>
+<tr><td>방문 내용</td><td>※ 방문해서 본 내용을 적습니다.</td></tr>
+<tr><td>방식</td><td>□ 방문 □ 전화</td></tr>
+<tr><td>메모</td><td>임시</td></tr>
+<tr><td>선정 여부</td><td>□ 선정 □ 미선정</td></tr></table>
+`;
+  const base = await hwpxToHwp(new Uint8Array(await markdownToHwpx(md)));
+  const rhwp = await loadRhwp();
+  const doc = new rhwp.HwpDocument(new Uint8Array(base));
+  try {
+    const ctl = (JSON.parse(doc.getControls()) as { ctrlId: string; list: number; para: number; controlIndex: number }[]).find((c) => c.ctrlId === 'tbl' && c.list === 0)!;
+    const steps = [{ controlIndex: ctl.controlIndex }];
+    const dims = JSON.parse(doc.getTableDimensionsByPath(0, ctl.para, JSON.stringify(steps)));
+    const cellAt = (row: number, col: number) => {
+      for (let i = 0; i < dims.cellCount; i++) {
+        const info = JSON.parse(doc.getCellInfoByPath(0, ctl.para, JSON.stringify([{ controlIndex: ctl.controlIndex, cellIndex: i, cellParaIndex: 0 }])));
+        if (info.row === row && info.col === col) return i;
+      }
+      throw new Error('칸 없음');
+    };
+    const path = (cell: number, k: number) => JSON.stringify([{ controlIndex: ctl.controlIndex, cellIndex: cell, cellParaIndex: k }]);
+    const guide = cellAt(1, 1);
+    const first = '※ 방문해서 본 내용을 적습니다.';
+    doc.splitParagraphInCellByPath(0, ctl.para, path(guide, 0), [...first].length);
+    doc.insertTextInCellByPath(0, ctl.para, path(guide, 1), 0, '예) 집 안 상태, 건강');
+    doc.splitParagraphInCellByPath(0, ctl.para, path(guide, 1), [...'예) 집 안 상태, 건강'].length);
+    doc.insertTextInCellByPath(0, ctl.para, path(guide, 2), 0, '예) 하고 싶은 말');
+    const gray = JSON.stringify({ textColor: '#999999', italic: true });
+    for (let k = 0; k < 3; k++) doc.applyCharFormatInCellByPath(0, ctl.para, path(guide, k), 0, doc.getCellParagraphLengthByPath(0, ctl.para, path(guide, k)), gray);
+    // 굵게 서식만 남은 빈칸: 글을 굵게 한 뒤 글만 지운다
+    const memo = cellAt(3, 1);
+    doc.applyCharFormatInCellByPath(0, ctl.para, path(memo, 0), 0, 2, JSON.stringify({ bold: true, underline: true, underlineType: 'Bottom' }));
+    doc.deleteTextInCellByPath(0, ctl.para, path(memo, 0), 0, 2);
+    return doc.exportHwp();
+  } finally {
+    doc.free();
+  }
 }

@@ -19,15 +19,15 @@ export function createApp(config: AppConfig, configFromFile: boolean, opts: { da
   const app = express();
 
   app.use(express.static(resolve(ROOT_DIR, 'public')));
-  app.use('/api/forms', formsRouter(new TemplateStore(resolve(dataDir, 'templates'))));
+  app.use('/api/forms', formsRouter(new TemplateStore(resolve(dataDir, 'templates')), config));
 
   app.get('/api/status', (_req, res) => {
     const forms = listFiles(resolve(TEST_DATA_DIR, 'forms'));
     const cases = listFiles(resolve(TEST_DATA_DIR, 'cases'));
     res.json({
       app: '사례비서',
-      version: '0.1.0',
-      stage: 1,
+      version: '0.2.0',
+      stage: 2,
       configFile: configFromFile ? '있음' : '없음 (기본값 사용)',
       checkMark: config.checkMark,
       ai: { provider: config.ai.provider, apiKeySet: config.ai.apiKey.length > 0 },
